@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Calendar, User, Phone, Mail, Clock, MessageSquare, CheckCircle, Award, Star, ArrowRight, CornerDownRight } from 'lucide-react';
+import { Calendar, User, Phone, Mail, Clock, MessageSquare, CheckCircle, Award, Star, ArrowRight, CornerDownRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { LashProduct, LashArtist, Appointment } from '../types';
 import { LASH_ARTISTS, LASH_PRODUCTS } from '../data';
 
@@ -25,9 +25,19 @@ export default function BookingForm({
   const [activeArtist, setActiveArtist] = useState<LashArtist>(LASH_ARTISTS[0]);
   const [bookingStep, setBookingStep] = useState<'form' | 'deposit'>('form');
   
-  // Custom Date Grid Generator (today + next 7 days layout for elite scannability)
-  const [selectedDateIndex, setSelectedDateIndex] = useState(1);
-  const [availableDates, setAvailableDates] = useState<{ label: string; dateStr: string; dayName: string }[]>([]);
+  // Calendar Month and Selected Day state
+  const getInitialSelectedDate = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    if (tomorrow.getDay() === 6) { // Saturday
+      tomorrow.setDate(tomorrow.getDate() + 1); // Select Sunday
+    }
+    return tomorrow;
+  };
+
+  const [selectedDate, setSelectedDate] = useState<Date>(getInitialSelectedDate);
+  const [currentYear, setCurrentYear] = useState(() => getInitialSelectedDate().getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(() => getInitialSelectedDate().getMonth());
   
   const [selectedTimeSlot, setSelectedTimeSlot] = useState('11:00 AM');
   
@@ -64,57 +74,103 @@ export default function BookingForm({
 
   // Voucher Success State
   const [confirmedBooking, setConfirmedBooking] = useState<Appointment | null>(null);
+  
+  // Loaded booked state
+  const [bookedAppointments, setBookedAppointments] = useState<Appointment[]>([]);
 
-  // Generate the next 8 days for booking (excluding Saturdays)
   useEffect(() => {
-    const dates = [];
-    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
-    let addedDays = 0;
-    let dayOffset = 0;
-    while (addedDays < 8) {
-      const d = new Date();
-      d.setDate(d.getDate() + dayOffset);
-      
-      // If it is Saturday, skip it
-      if (d.getDay() !== 6) {
-        dates.push({
-          label: `${d.getDate()} ${months[d.getMonth()]}`,
-          dateStr: d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
-          dayName: weekdays[d.getDay()]
-        });
-        addedDays++;
+    const saved = localStorage.getItem('nashglam_appointments');
+    if (saved) {
+      try {
+        setBookedAppointments(JSON.parse(saved));
+      } catch (e) {
+        console.error(e);
       }
-      dayOffset++;
     }
-    setAvailableDates(dates);
   }, []);
 
-  const defaultTimeSlots = [
-    { time: '09:30 AM', available: true },
-    { time: '11:00 AM', available: true },
-    { time: '01:30 PM', available: false }, // simulated busy spot
-    { time: '03:00 PM', available: true },
-    { time: '04:30 PM', available: true },
-    { time: '06:00 PM', available: false },
-  ];
-
-  const getDynamicTimeSlots = () => {
-    const selectedDay = availableDates[selectedDateIndex]?.dayName;
-    if (selectedDay === 'Fri') {
-      return defaultTimeSlots.map(slot => {
-        // Friday nights (4:30 PM and 6:00 PM) are unavailable
-        if (slot.time === '04:30 PM' || slot.time === '06:00 PM') {
-          return { ...slot, available: false };
-        }
-        return slot;
-      });
+  const getDynamicTimeSlots = (date: Date) => {
+    const day = date.getDay(); // 0 component Sun, 5 is Fri, 6 is Sat
+    
+    if (day === 6) {
+      return []; // Saturday is CLOSED
     }
-    return defaultTimeSlots;
+    
+    // Sunday has different operating slots (10:00 AM - 06:00 PM)
+    const slots = day === 0
+      ? [
+          { time: '10:00 AM' },
+          { time: '11:30 AM' },
+          { time: '01:00 PM' },
+          { time: '02:30 PM' },
+          { time: '04:00 PM' },
+          { time: '05:30 PM' },
+        ]
+      : [
+          { time: '09:30 AM' },
+          { time: '11:00 AM' },
+          { time: '01:30 PM' },
+          { time: '03:00 PM' },
+          { time: '04:30 PM' },
+          { time: '06:00 PM' },
+          { time: '07:30 PM' },
+        ];
+        
+    const now = new Date();
+    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const cellDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
+    return slots.map(slot => {
+      let isAvailable = true;
+      
+      // 1. Is day in the past?
+      if (cellDate < todayDate) {
+        isAvailable = false;
+      }
+      
+      // 2. Is day today? Check if slot hour has already passed!
+      if (cellDate.getTime() === todayDate.getTime()) {
+        const [timeStr, modifier] = slot.time.split(' ');
+        let [hoursStr, minutesStr] = timeStr.split(':');
+        let hours = parseInt(hoursStr, 10);
+        const minutes = parseInt(minutesStr, 10);
+        if (modifier === 'PM' && hours < 12) {
+          hours += 12;
+        }
+        if (modifier === 'AM' && hours === 12) {
+          hours = 0;
+        }
+        
+        const slotDateTime = new Date(cellDate.getFullYear(), cellDate.getMonth(), cellDate.getDate(), hours, minutes);
+        if (slotDateTime <= now) {
+          isAvailable = false;
+        }
+      }
+      
+      // 3. Friday nights: 4:30 PM, 6:00 PM, 7:30 PM are unavailable ("dont give availability on friday nights")
+      if (day === 5) {
+        if (slot.time === '04:30 PM' || slot.time === '06:00 PM' || slot.time === '07:30 PM') {
+          isAvailable = false;
+        }
+      }
+      
+      // 4. Already booked?
+      const targetDateStr = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      const isBooked = bookedAppointments.some(
+        (app) => app.date === targetDateStr && app.timeSlot === slot.time
+      );
+      if (isBooked) {
+        isAvailable = false;
+      }
+      
+      return {
+        time: slot.time,
+        available: isAvailable
+      };
+    });
   };
 
-  const activeTimeSlots = getDynamicTimeSlots();
+  const activeTimeSlots = getDynamicTimeSlots(selectedDate);
 
   const handleProceedToDeposit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,6 +190,13 @@ export default function BookingForm({
       alert("Please enter your phone contact details.");
       return;
     }
+
+    // Auto-select first available slot if currently selected slot isn't available
+    const findAvailable = activeTimeSlots.find(s => s.available);
+    if (findAvailable && !activeTimeSlots.some(s => s.time === selectedTimeSlot && s.available)) {
+      setSelectedTimeSlot(findAvailable.time);
+    }
+    
     setBookingStep('deposit');
   };
 
@@ -157,17 +220,24 @@ export default function BookingForm({
       return;
     }
 
+    const formattedDate = selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
     const newAppointment: Appointment = {
-      id: `LASH-${Math.floor(100000 + Math.random() * 90000)}`, // random booking id
+      id: `LASH-${Math.floor(100000 + Math.random() * 90000)}`,
       style: selectedProduct,
       artist: activeArtist,
-      date: availableDates[selectedDateIndex]?.dateStr || 'Tomorrow',
+      date: formattedDate,
       timeSlot: selectedTimeSlot,
       customerName: name,
       customerEmail: email,
       customerPhone: phone,
       totalPrice: selectedProduct.price,
     };
+
+    // Save locally
+    const updated = [...bookedAppointments, newAppointment];
+    setBookedAppointments(updated);
+    localStorage.setItem('nashglam_appointments', JSON.stringify(updated));
 
     setConfirmedBooking(newAppointment);
     onBookingConfirmed(newAppointment);
@@ -274,7 +344,7 @@ export default function BookingForm({
           >
             <div className={`border-b pb-4 space-y-1 ${isDarkMode ? 'border-stone-800' : 'border-stone-200/60'}`}>
               <span className="text-xs font-mono font-medium tracking-widest text-pink-500 uppercase">
-                Premium Concierge
+                Booking Concierge
               </span>
               <h2 className={`font-serif text-2xl sm:text-3xl font-medium ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>
                 {bookingStep === 'form' ? 'Reserve Your Lash Therapy' : 'Secure Booking Deposit'}
@@ -326,40 +396,145 @@ export default function BookingForm({
                   {/* 2. SELECT DATE CALENDAR & TIME SLOTS */}
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-1.5">
                     
-                    {/* Custom mini calendar grid */}
+                    {/* Custom monthly calendar grid */}
                     <div className="space-y-2 lg:col-span-7">
                       <label className={`text-xs font-semibold tracking-widest flex items-center space-x-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>
                         <Calendar className="w-4 h-4 text-pink-500" />
                         <span>2. SELECT BOOKING DATE</span>
                       </label>
                       
-                      <div className="grid grid-cols-4 gap-2">
-                        {availableDates.map((d, index) => (
-                          <button
-                            key={index}
-                            type="button"
-                            onClick={() => setSelectedDateIndex(index)}
-                            className={`p-2.5 border rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer ${
-                              selectedDateIndex === index
-                                ? isDarkMode
-                                  ? 'bg-stone-100 border-stone-100 text-stone-950 scale-[1.02] shadow-sm font-bold'
-                                  : 'bg-stone-900 border-stone-900 text-stone-50 scale-[1.02] shadow-xs'
-                                : isDarkMode
-                                  ? 'border-stone-800 bg-stone-950 text-stone-400 hover:bg-stone-800'
-                                  : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-55 hover:bg-stone-50'
-                            }`}
-                          >
-                            <span className="text-[10px] font-mono tracking-wider uppercase font-light">
-                              {d.dayName}
-                            </span>
-                            <span className="text-xs font-semibold mt-1">
-                              {d.label.split(' ')[0]}
-                            </span>
-                            <span className="text-[9px] opacity-75 font-mono">
-                              {d.label.split(' ')[1]}
-                            </span>
-                          </button>
-                        ))}
+                      <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-stone-950/65 border-stone-800/85' : 'bg-white border-stone-200'} shadow-2xs`}>
+                        {/* Month navigation header */}
+                        <div className="flex items-center justify-between pb-3.5 pt-0.5">
+                          <span className={`text-[11px] font-mono tracking-widest font-bold uppercase ${isDarkMode ? 'text-pink-400' : 'text-pink-600'}`}>
+                            {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][currentMonth]} {currentYear}
+                          </span>
+                          <div className="flex space-x-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (currentMonth === 0) {
+                                  setCurrentMonth(11);
+                                  setCurrentYear(prev => prev - 1);
+                                } else {
+                                  setCurrentMonth(prev => prev - 1);
+                                }
+                              }}
+                              className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                                isDarkMode ? 'border-stone-850 hover:bg-stone-800/80 text-stone-300' : 'border-stone-200 hover:bg-stone-100 text-stone-700'
+                              }`}
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (currentMonth === 11) {
+                                  setCurrentMonth(0);
+                                  setCurrentYear(prev => prev + 1);
+                                } else {
+                                  setCurrentMonth(prev => prev + 1);
+                                }
+                              }}
+                              className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
+                                isDarkMode ? 'border-stone-850 hover:bg-stone-800/80 text-stone-300' : 'border-stone-200 hover:bg-stone-100 text-stone-700'
+                              }`}
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Weekday indicator row */}
+                        <div className="grid grid-cols-7 gap-1 text-center font-mono text-[9px] font-bold tracking-wider text-stone-400 uppercase border-b pb-2 mb-2.5 border-dashed border-stone-800/20 dark:border-stone-800/60">
+                          <span>Sun</span>
+                          <span>Mon</span>
+                          <span>Tue</span>
+                          <span>Wed</span>
+                          <span>Thu</span>
+                          <span>Fri</span>
+                          <span>Sat</span>
+                        </div>
+
+                        {/* Complete month cells rendering */}
+                        <div className="grid grid-cols-7 gap-1.5">
+                          {(() => {
+                            const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
+                            const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+                            const cells = [];
+                            
+                            for (let i = 0; i < firstDayIndex; i++) {
+                              cells.push(null);
+                            }
+                            for (let d = 1; d <= daysInMonth; d++) {
+                              cells.push(new Date(currentYear, currentMonth, d));
+                            }
+                            
+                            return cells.map((cellDate, idx) => {
+                              if (!cellDate) {
+                                return <div key={`empty-${idx}`} />;
+                              }
+                              
+                              const cellDayNum = cellDate.getDate();
+                              const isSat = cellDate.getDay() === 6;
+                              const today = new Date();
+                              const todayTrunc = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                              const cellTrunc = new Date(cellDate.getFullYear(), cellDate.getMonth(), cellDate.getDate());
+                              const isPast = cellTrunc < todayTrunc;
+                              
+                              const isSelected = selectedDate &&
+                                selectedDate.getDate() === cellDate.getDate() &&
+                                selectedDate.getMonth() === cellDate.getMonth() &&
+                                selectedDate.getFullYear() === cellDate.getFullYear();
+                                
+                              const isToday = today.getDate() === cellDate.getDate() &&
+                                today.getMonth() === cellDate.getMonth() &&
+                                today.getFullYear() === cellDate.getFullYear();
+                                
+                              const isDisabled = isPast || isSat;
+                              
+                              let buttonStyle = "aspect-square rounded-lg flex flex-col items-center justify-center text-xs transition-all relative font-sans ";
+                              
+                              if (isDisabled) {
+                                buttonStyle += isDarkMode
+                                  ? "bg-stone-900/35 border border-transparent text-stone-600 line-through cursor-not-allowed opacity-35 "
+                                  : "bg-stone-50 border border-transparent text-stone-300 line-through cursor-not-allowed opacity-50 ";
+                              } else if (isSelected) {
+                                buttonStyle += isDarkMode
+                                  ? "bg-pink-600 border border-pink-500 text-stone-100 font-bold scale-[1.03] shadow-xs cursor-pointer "
+                                  : "bg-stone-900 border border-stone-800 text-stone-50 font-bold scale-[1.03] shadow-xs cursor-pointer ";
+                              } else {
+                                buttonStyle += isDarkMode
+                                  ? "border border-stone-850 bg-stone-900 hover:bg-stone-800 hover:border-stone-700 text-stone-300 cursor-pointer "
+                                  : "border border-stone-200 bg-white hover:bg-stone-100/60 text-stone-700 cursor-pointer ";
+                              }
+                              
+                              return (
+                                <button
+                                  key={`day-${idx}`}
+                                  type="button"
+                                  disabled={isDisabled}
+                                  onClick={() => {
+                                    setSelectedDate(cellDate);
+                                    const nextSlots = getDynamicTimeSlots(cellDate);
+                                    const firstAvailable = nextSlots.find(s => s.available);
+                                    if (firstAvailable) {
+                                      setSelectedTimeSlot(firstAvailable.time);
+                                    }
+                                  }}
+                                  className={buttonStyle}
+                                >
+                                  {isToday && !isSelected && (
+                                    <span className="absolute bottom-1 w-1 h-1 rounded-full bg-pink-500 animate-pulse" />
+                                  )}
+                                  <span className={isSelected ? "font-bold text-xs" : "text-xs"}>
+                                    {cellDayNum}
+                                  </span>
+                                </button>
+                              );
+                            });
+                          })()}
+                        </div>
                       </div>
                     </div>
 
@@ -370,7 +545,7 @@ export default function BookingForm({
                         <span>3. CHOOSE TIME</span>
                       </label>
 
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 gap-2">
                         {activeTimeSlots.map((slot) => (
                           <button
                             key={slot.time}
@@ -380,15 +555,15 @@ export default function BookingForm({
                             className={`py-3 px-1 border text-center rounded-xl text-[11px] font-mono font-medium transition-all ${
                               !slot.available
                                 ? isDarkMode
-                                  ? 'bg-stone-800/40 border-stone-800 text-stone-600 line-through cursor-not-allowed'
-                                  : 'bg-stone-100 border-stone-100 text-stone-300 line-through cursor-not-allowed'
+                                  ? 'bg-stone-800/40 border-stone-800/70 text-stone-600 line-through cursor-not-allowed opacity-40'
+                                  : 'bg-stone-100 border-stone-100 text-stone-300 line-through cursor-not-allowed opacity-50'
                                 : selectedTimeSlot === slot.time
                                 ? isDarkMode
-                                  ? 'border-pink-500 bg-pink-950/30 text-pink-300 font-bold shadow-2xs'
+                                  ? 'border-pink-500 bg-pink-950/35 text-pink-300 font-bold shadow-2xs'
                                   : 'border-pink-500 bg-pink-50 text-pink-700 font-bold shadow-2xs'
                                 : isDarkMode
-                                  ? 'border-stone-800 bg-stone-950 text-stone-300 hover:bg-stone-800 cursor-pointer'
-                                  : 'border-stone-200 bg-white text-stone-655 hover:bg-[#fcfbf9] cursor-pointer'
+                                  ? 'border-stone-850 bg-stone-900 text-stone-300 hover:bg-stone-805 hover:bg-stone-800/80 cursor-pointer'
+                                  : 'border-stone-200 bg-white text-stone-650 hover:bg-stone-100/40 hover:bg-[#fcfbf9] cursor-pointer'
                             }`}
                           >
                             {slot.time}
@@ -520,7 +695,9 @@ export default function BookingForm({
                       </div>
                       <div className="space-y-0.5">
                         <span className="text-[9px] text-stone-400 font-mono tracking-wider block uppercase">DATE & TIME</span>
-                        <span className={`font-semibold block ${isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>{availableDates[selectedDateIndex]?.dateStr || 'Tomorrow'}</span>
+                        <span className={`font-semibold block ${isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>
+                          {selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                        </span>
                         <span className="text-pink-500 font-mono font-bold">{selectedTimeSlot}</span>
                       </div>
                       <div className="space-y-0.5">

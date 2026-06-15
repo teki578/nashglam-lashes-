@@ -30,7 +30,7 @@ export default function BeautyFaqs({ isDarkMode = false }: BeautyFaqsProps) {
     },
     {
       question: 'How long do extension sets last, and when should I get fills?',
-      answer: 'Your natural eyelashes shed organically at a rate of 2-5 lashes per day, mirroring standard body hair growth. Consequently, extensions typically last 4-6 weeks depending on retention care. We recommend scheduling premium Lash Fills every 2 to 3 weeks (with at least 40% of original extensions remaining) to clean, remove outgrown shafts, and fill new lash sprouts.'
+      answer: 'Your natural eyelashes shed organically at a rate of 2-5 lashes per day, mirroring standard body hair growth. Consequently, extensions typically last 4-6 weeks depending on retention care. We recommend scheduling Lash Fills every 2 to 3 weeks (with at least 40% of original extensions remaining) to clean, remove outgrown shafts, and fill new lash sprouts.'
     },
     {
       question: 'Will eyelash extensions damage my natural lash hair?',

@@ -14,16 +14,19 @@ import CartDrawer from './components/CartDrawer';
 import { LASH_PRODUCTS } from './data';
 import { CartItem, Appointment, LashProduct } from './types';
 
-const HERO_IMAGE = '/src/assets/images/lash_hero_banner_1781406354819.jpg';
+import heroImg from './assets/images/lash_hero_banner_1781406354819.jpg';
+import cleanKitImg from './assets/images/lash_clean_kit_1781410195486.jpg';
+
+const HERO_IMAGE = heroImg;
 
 const CLEAN_KIT_PRODUCT: LashProduct = {
   id: 'lash_clean_kit',
-  name: 'NashGlam Professional Lash Rescue Cleaning Package',
+  name: 'Lash Cleaning Package',
   price: 20,
   type: 'Lash Care' as any,
-  description: 'Our signature professional-grade lash maintenance package. Expertly formulated to eliminate make-up residues, oils, and environmental build-up while extending extension retention up to 6+ weeks.',
+  description: 'Expertly formulated to eliminate make-up residues, oils, and environmental build-up while extending extension retention up to 6+ weeks.',
   benefits: [
-    'Deep cleansing bubble wash (50ml foaming bottle)',
+    'Deep cleansing bubble wash (60ml foaming bottle)',
     'Ultra-soft customized antimicrobial washing brush',
     'Two long-retention extension lash spoolies',
     'Elegant protective travel protection pouch'
@@ -33,12 +36,22 @@ const CLEAN_KIT_PRODUCT: LashProduct = {
   lengthOptions: ['Champagne Gold Brush', 'Midnight Obsidian Brush', 'Rose Gold Brush'],
   thickness: 'pH-Balanced',
   durationMin: 0,
-  image: '/src/assets/images/lash_clean_kit_1781410195486.jpg',
+  image: cleanKitImg,
 };
 
 export default function App() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>(() => {
+    const saved = localStorage.getItem('nashglam_appointments');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return [];
+  });
   const [lastConfirmedAppointment, setLastConfirmedAppointment] = useState<Appointment | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -132,13 +145,21 @@ export default function App() {
 
   // BOOK AN APPOINTMENT (Synchronized to local app state and pre-selected style)
   const handleBookingConfirmed = (appointment: Appointment) => {
-    setAppointments((prev) => [...prev, appointment]);
+    setAppointments((prev) => {
+      const updated = [...prev, appointment];
+      localStorage.setItem('nashglam_appointments', JSON.stringify(updated));
+      return updated;
+    });
     setLastConfirmedAppointment(appointment);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleRemoveAppointment = (appId: string) => {
-    setAppointments((prev) => prev.filter((app) => app.id !== appId));
+    setAppointments((prev) => {
+      const updated = prev.filter((app) => app.id !== appId);
+      localStorage.setItem('nashglam_appointments', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const handleBookFromCatalog = (product: LashProduct) => {
@@ -256,7 +277,7 @@ export default function App() {
               NashGlam Lash Clean Kit
             </h2>
             <p className={`font-sans text-xs sm:text-sm font-light leading-relaxed ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-              Maintain professional retention after your appointments. Our premium oil-free cleansing solution works to preserve fiber bonds and keep your lashes fluffy and clean.
+              Maintain professional retention after your appointments. Our oil-free cleansing solution works to preserve fiber bonds and keep your lashes fluffy and clean.
             </p>
           </div>
 
@@ -292,7 +313,7 @@ export default function App() {
                     <div>
                       <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-pink-500">RETENTION MAXIMIZER</span>
                       <h3 className={`font-serif text-2xl font-semibold leading-tight mt-1 ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>
-                        Professional Lash Rescue Cleaning Package
+                        Lash Cleaning Package
                       </h3>
                     </div>
                     <span className="text-2xl font-serif font-black text-pink-600 block pl-3">
@@ -410,7 +431,7 @@ export default function App() {
               NASHGLAM <span className="font-light italic text-pink-500">LASHES</span>
             </span>
             <p className="text-xs text-stone-400 font-light leading-relaxed">
-              Dedicated exclusively to custom-designed eyelash aesthetics. Handcrafted fiber fans with premium isolation guarantees.
+              Dedicated exclusively to custom-designed eyelash aesthetics. Handcrafted fiber fans with professional isolation guarantees.
             </p>
             <div className="flex space-x-3 pt-2 text-stone-400">
               <a href="#instagram" className="hover:text-pink-500 transition-colors">

@@ -5,8 +5,10 @@
 
 import { LashStyleType, LashProduct, LashArtist } from './types';
 
+import productsShowcaseImg from './assets/images/lash_products_showcase_1781406369055.jpg';
+
 // Let's reuse our premium generated products showcase image
-const PRODUCT_SHOWCASE = '/src/assets/images/lash_products_showcase_1781406369055.jpg';
+const PRODUCT_SHOWCASE = productsShowcaseImg;
 
 export const LASH_PRODUCTS: LashProduct[] = [
   {
@@ -16,7 +18,7 @@ export const LASH_PRODUCTS: LashProduct[] = [
     type: LashStyleType.CLASSIC,
     description: 'Perfect 1:1 extensions applying one individual silk fiber to each healthy natural lash.',
     benefits: ['Subtle, eye-opening daily look', 'Adds elegant length and natural darkness', 'Zero-weight comfort and effortless wear'],
-    fullDescription: 'Our signature classic set is designed for those seeking a highly refined, naturally enhanced appearance. We customize length and curl based on your unique eye symmetry, giving the illusion of premium mascara on perfectly separated lashes.',
+    fullDescription: 'Our signature classic set is designed for those seeking a highly refined, naturally enhanced appearance. We customize length and curl based on your unique eye symmetry, giving the illusion of high-quality mascara on perfectly separated lashes.',
     curlOptions: ['C-Curl (Natural)', 'D-Curl (Dramatic)', 'CC-Curl (Elevated)'],
     lengthOptions: ['9mm', '10mm', '11mm', '12mm', '13mm'],
     thickness: '0.15mm',

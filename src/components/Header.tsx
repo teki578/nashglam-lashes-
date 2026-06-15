@@ -168,14 +168,6 @@ export default function Header({
               <Sparkles className="w-3.5 h-3.5 animate-pulse text-pink-500" />
               Lash extensions crafted with care, from a home studio in Terrebonne!
             </span>
-            <span className="flex items-center gap-1.5 font-mono shrink-0">
-              <Sparkles className="w-3.5 h-3.5 animate-pulse text-pink-500" />
-              Enjoy dedicated 1:1 premium beauty mapping in our bespoke styling space!
-            </span>
-            <span className="flex items-center gap-1.5 font-mono shrink-0">
-              <Sparkles className="w-3.5 h-3.5 animate-pulse text-pink-500" />
-              Reserve Today — Formaldehyde-free luxury cashmere silk lashes!
-            </span>
 
             {/* Duplicated for seamless circular scroll */}
             <span className="flex items-center gap-1.5 font-mono shrink-0">
@@ -185,14 +177,6 @@ export default function Header({
             <span className="flex items-center gap-1.5 font-mono shrink-0">
               <Sparkles className="w-3.5 h-3.5 animate-pulse text-pink-500" />
               Lash extensions crafted with care, from a home studio in Terrebonne!
-            </span>
-            <span className="flex items-center gap-1.5 font-mono shrink-0">
-              <Sparkles className="w-3.5 h-3.5 animate-pulse text-pink-500" />
-              Enjoy dedicated 1:1 premium beauty mapping in our bespoke styling space!
-            </span>
-            <span className="flex items-center gap-1.5 font-mono shrink-0">
-              <Sparkles className="w-3.5 h-3.5 animate-pulse text-pink-500" />
-              Reserve Today — Formaldehyde-free luxury cashmere silk lashes!
             </span>
           </div>
         </div>

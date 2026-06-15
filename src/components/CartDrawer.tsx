@@ -165,7 +165,7 @@ export default function CartDrawer({
                       <div>
                         <p className={`font-serif text-lg font-medium ${isDarkMode ? 'text-stone-100' : 'text-stone-800'}`}>Your bag is currently empty</p>
                         <p className={`text-xs mt-1.5 max-w-xs font-sans font-light ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-                          Pick a premium lash extension set, take the style consultation quiz, or reserve a luxury therapy slot to continue.
+                          Pick a lash extension set, take the style consultation quiz, or reserve a luxury therapy slot to continue.
                         </p>
                       </div>
                       <button

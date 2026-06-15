@@ -26,7 +26,7 @@ const INITIAL_REVIEWS: Review[] = [
     name: 'Camila Vance',
     rating: 5,
     date: 'May 28, 2026',
-    text: 'I purchased the Lash Rescue Cleaning Package alongside my appointment. Clean, oil-free formula with the softest micro-brush, it has single-handedly saved my hybrid lashes from fallout. Simply flawless service and products!',
+    text: 'I purchased the Lash Cleaning Package alongside my appointment. Clean, oil-free formula with the softest micro-brush, it has single-handedly saved my hybrid lashes from fallout. Simply flawless service and products!',
     service: 'Hybrid',
     verified: true,
   },
@@ -142,7 +142,7 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
               <span>Leave a Review</span>
             </h3>
             <p className={`text-xs font-sans font-light ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-              Your feedback helps us maintain our premium beauty & luxury service standards.
+              Your feedback helps us maintain our beauty & luxury service standards.
             </p>
           </div>
 
@@ -224,7 +224,7 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
                 <option value="Hybrid">Hybrid</option>
                 <option value="Classic">Classic</option>
                 <option value="Wet Set">Wet Set</option>
-                <option value="Lash Rescue Cleaning Package">Lash Rescue Cleaning Package</option>
+                <option value="Lash Cleaning Package">Lash Cleaning Package</option>
               </select>
             </div>
 

@@ -9,7 +9,9 @@ import { Eye, Camera, RefreshCw, Sparkles, Sliders, Check, HelpCircle, ArrowRigh
 import { EyeShape, LashVibe, LashStyleType, LashProduct } from '../types';
 import { STYLING_REC_MATRIX, LASH_PRODUCTS } from '../data';
 
-const MODEL_IMAGE = '/src/assets/images/makeup_model_portrait_1781406443084.jpg';
+import modelPortraitImg from '../assets/images/makeup_model_portrait_1781406443084.jpg';
+
+const MODEL_IMAGE = modelPortraitImg;
 
 interface InteractiveCustomizerProps {
   onAddCustomSetToCart: (product: LashProduct, curl: string, length: string) => void;

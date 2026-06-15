@@ -1,0 +1,6 @@
+{
+  "name": "NashGlam Lashes",
+  "description": "Premium eyelash extensions crafted with care, from a home studio in Terrebonne. Browse products like our Lash Rescue Cleaning Package, reserve styling treatment times, and leave client feedback.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

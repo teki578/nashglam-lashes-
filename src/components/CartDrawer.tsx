@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, ShoppingBag, Plus, Minus, Trash2, Calendar, Sparkles, Check, BookmarkCheck } from 'lucide-react';
 import { CartItem, Appointment } from '../types';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -29,7 +30,9 @@ export default function CartDrawer({
   onRemoveAppointment,
   isDarkMode = false,
 }: CartDrawerProps) {
-  
+  const { t } = useLanguage();
+  const c = t.cart;
+
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [checkoutFinished, setCheckoutFinished] = useState(false);
 
@@ -40,8 +43,6 @@ export default function CartDrawer({
   };
 
   const subtotal = calculateSubtotal();
-  const tax = 0;
-  const sanitizationFee = 0;
   const total = subtotal;
 
   const handleCheckout = () => {
@@ -60,7 +61,7 @@ export default function CartDrawer({
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden" aria-labelledby="slide-over-title" role="dialog" aria-modal="true">
-      {/* Dark overlay backdrop */}
+      {/* Backdrop */}
       <div className="absolute inset-0 bg-stone-900/60 backdrop-blur-xs transition-opacity" onClick={onClose} />
 
       <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
@@ -81,7 +82,7 @@ export default function CartDrawer({
             <div className="flex items-center space-x-2">
               <ShoppingBag className="w-5 h-5 text-pink-500" />
               <h2 className={`font-serif text-xl font-semibold ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>
-                Your Luxury Bag
+                {c.title}
               </h2>
             </div>
             <button
@@ -96,13 +97,12 @@ export default function CartDrawer({
             </button>
           </div>
 
-          {/* Core Content area */}
+          {/* Content */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             
             <AnimatePresence mode="wait">
               
               {checkoutFinished ? (
-                /* --- CHECKOUT SUCCESS OVERLAY --- */
                 <motion.div
                   key="checkout-success"
                   initial={{ opacity: 0, scale: 0.95 }}
@@ -116,28 +116,27 @@ export default function CartDrawer({
                     <Check className="w-8 h-8" />
                   </div>
                   <div>
-                    <h3 className={`font-serif text-xl font-bold ${isDarkMode ? 'text-stone-50' : 'text-stone-900'}`}>Order Locked In!</h3>
+                    <h3 className={`font-serif text-xl font-bold ${isDarkMode ? 'text-stone-50' : 'text-stone-900'}`}>{c.orderLocked}</h3>
                     <p className={`text-xs font-sans mt-1 ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-                      Your luxurious lash mapping order, reservation holds, and bespoke care preparations have been queued at the boutique frontdesk.
+                      {c.orderLockedDesc}
                     </p>
                   </div>
                   
-                  {/* Mock invoice details */}
                   <div className={`border rounded-xl p-4 w-full text-xs font-mono text-left divide-y transition-colors ${
                     isDarkMode 
                       ? 'bg-[#0c0a09] border-stone-800 text-stone-300 divide-stone-800/85' 
                       : 'bg-white border-stone-200 text-stone-700 divide-stone-100'
                   }`}>
                     <div className={`pb-2.5 flex items-center justify-between text-[11px] font-bold ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>
-                      <span>BOUTIQUE ORDER ID</span>
+                      <span>{c.boutiqueOrder}</span>
                       <span className="text-pink-500 font-semibold">#LASH-ORDER-{Math.floor(10000 + Math.random() * 90000)}</span>
                     </div>
                     <div className="py-2 flex justify-between">
-                      <span>Total Processing Items</span>
+                      <span>{c.totalItems}</span>
                       <span className={`font-semibold ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>{cartItems.length + appointments.length}</span>
                     </div>
                     <div className="py-2 flex justify-between text-pink-500 font-bold">
-                      <span>Grand Total Closed</span>
+                      <span>{c.grandTotalClosed}</span>
                       <span>${total.toFixed(2)}</span>
                     </div>
                   </div>
@@ -148,24 +147,23 @@ export default function CartDrawer({
                       isDarkMode ? 'bg-stone-100 hover:bg-stone-200 text-[#0c0a09]' : 'bg-stone-900 hover:bg-stone-800 text-stone-50'
                     }`}
                   >
-                    CONTINUE STUDYING DESIGNS
+                    {c.continueStudying}
                   </button>
                 </motion.div>
               ) : (
                 
-                /* --- GENERAL CART ITEMS LISTING --- */
                 <motion.div key="cart-list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                   
-                  {/* Empty warning helper */}
+                  {/* Empty state */}
                   {cartItems.length === 0 && appointments.length === 0 && (
                     <div className="flex flex-col items-center justify-center text-center py-16 space-y-3.5">
                       <div className={`p-3 rounded-full transition-colors ${isDarkMode ? 'bg-stone-900 text-stone-500' : 'bg-stone-100 text-stone-400'}`}>
                         <ShoppingBag className="w-8 h-8" />
                       </div>
                       <div>
-                        <p className={`font-serif text-lg font-medium ${isDarkMode ? 'text-stone-100' : 'text-stone-800'}`}>Your bag is currently empty</p>
+                        <p className={`font-serif text-lg font-medium ${isDarkMode ? 'text-stone-100' : 'text-stone-800'}`}>{c.emptyTitle}</p>
                         <p className={`text-xs mt-1.5 max-w-xs font-sans font-light ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-                          Pick a lash extension set, take the style consultation quiz, or reserve a luxury therapy slot to continue.
+                          {c.emptyDesc}
                         </p>
                       </div>
                       <button
@@ -174,19 +172,19 @@ export default function CartDrawer({
                           isDarkMode ? 'bg-stone-100 hover:bg-stone-200 text-stone-950' : 'bg-stone-900 hover:bg-stone-800 text-[#f5f5f4]'
                         }`}
                       >
-                        Browse Services Lookbook
+                        {c.browseServices}
                       </button>
                     </div>
                   )}
 
-                  {/* 1. SECURED APPOINTMENTS LIST */}
+                  {/* Appointments list */}
                   {appointments.length > 0 && (
                     <div className="space-y-3">
                       <span className={`text-[10px] font-mono font-bold tracking-wider uppercase flex items-center space-x-1 ${
                         isDarkMode ? 'text-pink-400' : 'text-pink-600'
                       }`}>
                         <Calendar className="w-3.5 h-3.5" />
-                        <span>RESERVED SLOTS ({appointments.length})</span>
+                        <span>{c.reservedSlots} ({appointments.length})</span>
                       </span>
                       
                       <div className="space-y-2.5">
@@ -211,11 +209,18 @@ export default function CartDrawer({
                               <span className={`text-[9px] font-bold font-mono tracking-wider py-0.5 px-2 rounded-full uppercase ${
                                 isDarkMode ? 'bg-emerald-950/80 text-emerald-300' : 'bg-emerald-100 text-emerald-800'
                               }`}>
-                                SECURED APPOINTMENT
+                                {c.securedAppointment}
                               </span>
-                              <h4 className={`font-serif text-base font-semibold mt-1.5 ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>{app.style.name}</h4>
+                              <h4 className={`font-serif text-base font-semibold mt-1.5 flex items-baseline space-x-1.5 ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>
+                                <span>{app.style.name}</span>
+                                {app.selectedServiceOption && (
+                                  <span className={`text-[11px] font-sans font-medium ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
+                                    ({app.selectedServiceOption.label})
+                                  </span>
+                                )}
+                              </h4>
                               <p className={`text-[11px] font-mono mt-0.5 uppercase ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-                                {app.date} at <span className="font-bold text-pink-500">{app.timeSlot}</span>
+                                {app.date} {c.at} <span className="font-bold text-pink-500">{app.timeSlot}</span>
                               </p>
                             </div>
 
@@ -223,9 +228,9 @@ export default function CartDrawer({
                               isDarkMode ? 'border-emerald-900/40 text-stone-300' : 'border-emerald-200/50 text-stone-600'
                             }`}>
                               <img src={app.artist.avatar} alt="" className="w-5 h-5 rounded-full object-cover" />
-                              <span>Stylist: <span className={`font-semibold ${isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>{app.artist.name}</span></span>
+                              <span>{c.stylist} <span className={`font-semibold ${isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>{app.artist.name}</span></span>
                               <span className="mx-1 text-stone-400">•</span>
-                              <span className={`font-bold ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>${app.totalPrice}</span>
+                              <span className={`font-bold ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>${app.totalPrice}.00</span>
                             </div>
                           </div>
                         ))}
@@ -233,14 +238,14 @@ export default function CartDrawer({
                     </div>
                   )}
 
-                  {/* 2. SERVICES & PRODUCTS PRODUCTS LIST */}
+                  {/* Products list */}
                   {cartItems.length > 0 && (
                     <div className="space-y-3">
                       <span className={`text-[10px] font-mono font-bold tracking-wider uppercase flex items-center space-x-1 ${
                         isDarkMode ? 'text-stone-500' : 'text-stone-400'
                       }`}>
                         <Sparkles className="w-3.5 h-3.5 text-pink-500" />
-                        <span>CUSTOMIZED TREATMENTS ({cartItems.length})</span>
+                        <span>{c.customizedTreatments} ({cartItems.length})</span>
                       </span>
 
                       <div className="space-y-3.5">
@@ -253,14 +258,12 @@ export default function CartDrawer({
                                 : 'bg-white border-stone-200 shadow-2xs'
                             }`}
                           >
-                            {/* Product photo */}
                             <img
                               src={item.product.image}
                               alt=""
                               className="w-16 h-16 rounded-lg object-cover bg-stone-100"
                             />
 
-                            {/* Details info */}
                             <div className="flex-1 flex flex-col justify-between pr-5">
                               <div>
                                 <h4 className={`font-serif text-[14px] font-semibold leading-tight ${
@@ -269,17 +272,16 @@ export default function CartDrawer({
                                   {item.product.name}
                                 </h4>
                                 <div className="flex flex-wrap gap-2.5 mt-1 font-mono text-[10px] text-stone-400 leading-none">
-                                  <span>CURL: <span className={isDarkMode ? 'font-bold text-stone-300' : 'font-bold text-stone-700'}>{item.selectedCurl}</span></span>
-                                  <span>LEN: <span className={isDarkMode ? 'font-bold text-stone-300' : 'font-bold text-stone-700'}>{item.selectedLength}</span></span>
+                                  <span>{c.curl} <span className={isDarkMode ? 'font-bold text-stone-300' : 'font-bold text-stone-700'}>{item.selectedCurl}</span></span>
+                                  <span>{c.len} <span className={isDarkMode ? 'font-bold text-stone-300' : 'font-bold text-stone-700'}>{item.selectedLength}</span></span>
                                 </div>
                               </div>
 
                               <div className="flex items-center justify-between pt-1.5">
                                 <span className={`text-sm font-bold ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>
-                                  ${item.product.price}
+                                  ${item.product.price}.00
                                 </span>
                                 
-                                {/* Quantity editor */}
                                 <div className={`flex items-center space-x-2.5 border rounded-lg p-1 transition-colors ${
                                   isDarkMode ? 'bg-stone-900 border-stone-800' : 'bg-stone-50 border-stone-200'
                                 }`}>
@@ -306,7 +308,6 @@ export default function CartDrawer({
                               </div>
                             </div>
 
-                            {/* Remove button */}
                             <button
                               onClick={() => onRemoveItem(item.id)}
                               className="absolute top-4 right-4 text-stone-400 hover:text-rose-600 transition-colors cursor-pointer"
@@ -328,7 +329,7 @@ export default function CartDrawer({
 
           </div>
 
-          {/* Subtotal fee summary footer */}
+          {/* Footer / checkout */}
           {!checkoutFinished && (cartItems.length > 0 || appointments.length > 0) && (
             <div className={`p-6 border-t space-y-4 transition-colors ${
               isDarkMode ? 'bg-[#0c0a09] border-stone-800' : 'bg-white border-stone-200/60'
@@ -336,7 +337,7 @@ export default function CartDrawer({
               
               <div className={`space-y-2 border-b pb-3 ${isDarkMode ? 'border-stone-800' : 'border-stone-100'}`}>
                 <div className={`flex justify-between text-xs font-sans ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-                  <span>Cart Subtotal</span>
+                  <span>{c.cartSubtotal}</span>
                   <span className={`font-semibold ${isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>${subtotal.toFixed(2)}</span>
                 </div>
               </div>
@@ -344,11 +345,10 @@ export default function CartDrawer({
               <div className={`flex justify-between text-base font-serif font-bold ${
                 isDarkMode ? 'text-stone-100' : 'text-stone-900'
               }`}>
-                <span>Grand Due Total</span>
+                <span>{c.grandTotal}</span>
                 <span className="text-pink-500 font-extrabold">${total.toFixed(2)}</span>
               </div>
 
-              {/* Checkout locked triggers */}
               <button
                 onClick={handleCheckout}
                 disabled={isCheckingOut}
@@ -364,12 +364,12 @@ export default function CartDrawer({
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    <span>LOCKED SECURING...</span>
+                    <span>{c.locking}</span>
                   </>
                 ) : (
                   <>
                     <BookmarkCheck className="w-4 h-4" />
-                    <span>FINALIZE & LOCK BAG DEPOSIT</span>
+                    <span>{c.finalize}</span>
                   </>
                 )}
               </button>
@@ -377,7 +377,7 @@ export default function CartDrawer({
               <p className={`text-[10px] font-sans text-center leading-normal ${
                 isDarkMode ? 'text-stone-500' : 'text-stone-400'
               }`}>
-                Article fees are fully refundable up to 24 hours prior to appointment slot arrival.
+                {c.refundNote}
               </p>
             </div>
           )}

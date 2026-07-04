@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, User, Phone, Mail, Clock, MessageSquare, CheckCircle, Award, Star, ArrowRight, CornerDownRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { LashProduct, LashArtist, Appointment } from '../types';
 import { LASH_ARTISTS, LASH_PRODUCTS } from '../data';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface BookingFormProps {
   selectedProduct: LashProduct | null;
@@ -22,17 +23,22 @@ export default function BookingForm({
   onSelectProduct,
   isDarkMode = false,
 }: BookingFormProps) {
+  const { t, lang } = useLanguage();
+  const b = t.booking;
+
   const [activeArtist, setActiveArtist] = useState<LashArtist>(LASH_ARTISTS[0]);
   const [bookingStep, setBookingStep] = useState<'form' | 'deposit'>('form');
   
   // Calendar Month and Selected Day state
   const getInitialSelectedDate = () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    if (tomorrow.getDay() === 6) { // Saturday
-      tomorrow.setDate(tomorrow.getDate() + 1); // Select Sunday
+    // Minimum 48h in advance = 2 full calendar days ahead
+    const d = new Date();
+    d.setDate(d.getDate() + 2);
+    const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    if (target.getDay() === 6) { // skip Saturday — not available
+      target.setDate(target.getDate() + 1); // jump to Sunday
     }
-    return tomorrow;
+    return target;
   };
 
   const [selectedDate, setSelectedDate] = useState<Date>(getInitialSelectedDate);
@@ -40,6 +46,7 @@ export default function BookingForm({
   const [currentMonth, setCurrentMonth] = useState(() => getInitialSelectedDate().getMonth());
   
   const [selectedTimeSlot, setSelectedTimeSlot] = useState('11:00 AM');
+  const [selectedServiceOptionId, setSelectedServiceOptionId] = useState<string>('full');
   
   // Intake Forms state
   const [name, setName] = useState('');
@@ -90,7 +97,7 @@ export default function BookingForm({
   }, []);
 
   const getDynamicTimeSlots = (date: Date) => {
-    const day = date.getDay(); // 0 component Sun, 5 is Fri, 6 is Sat
+    const day = date.getDay(); // 0=Sun, 5=Fri, 6=Sat
     
     if (day === 6) {
       return []; // Saturday is CLOSED
@@ -117,44 +124,33 @@ export default function BookingForm({
         ];
         
     const now = new Date();
-    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // 48-hour advance booking cutoff
+    const cutoff48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
     const cellDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     
     return slots.map(slot => {
       let isAvailable = true;
-      
-      // 1. Is day in the past?
-      if (cellDate < todayDate) {
+
+      // 1. Is this slot within the mandatory 48-hour advance booking window?
+      const [timeStr, modifier] = slot.time.split(' ');
+      let [hoursStr, minutesStr] = timeStr.split(':');
+      let hours = parseInt(hoursStr, 10);
+      const minutes = parseInt(minutesStr, 10);
+      if (modifier === 'PM' && hours < 12) hours += 12;
+      if (modifier === 'AM' && hours === 12) hours = 0;
+      const slotDateTime = new Date(cellDate.getFullYear(), cellDate.getMonth(), cellDate.getDate(), hours, minutes);
+      if (slotDateTime <= cutoff48h) {
         isAvailable = false;
       }
       
-      // 2. Is day today? Check if slot hour has already passed!
-      if (cellDate.getTime() === todayDate.getTime()) {
-        const [timeStr, modifier] = slot.time.split(' ');
-        let [hoursStr, minutesStr] = timeStr.split(':');
-        let hours = parseInt(hoursStr, 10);
-        const minutes = parseInt(minutesStr, 10);
-        if (modifier === 'PM' && hours < 12) {
-          hours += 12;
-        }
-        if (modifier === 'AM' && hours === 12) {
-          hours = 0;
-        }
-        
-        const slotDateTime = new Date(cellDate.getFullYear(), cellDate.getMonth(), cellDate.getDate(), hours, minutes);
-        if (slotDateTime <= now) {
-          isAvailable = false;
-        }
-      }
-      
-      // 3. Friday nights: 4:30 PM, 6:00 PM, 7:30 PM are unavailable ("dont give availability on friday nights")
+      // 2. Friday nights: 4:30 PM, 6:00 PM, 7:30 PM are unavailable
       if (day === 5) {
         if (slot.time === '04:30 PM' || slot.time === '06:00 PM' || slot.time === '07:30 PM') {
           isAvailable = false;
         }
       }
       
-      // 4. Already booked?
+      // 3. Already booked?
       const targetDateStr = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       const isBooked = bookedAppointments.some(
         (app) => app.date === targetDateStr && app.timeSlot === slot.time
@@ -172,26 +168,59 @@ export default function BookingForm({
 
   const activeTimeSlots = getDynamicTimeSlots(selectedDate);
 
+  const handleManualDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (!val) return;
+    const [year, month, day] = val.split('-').map(Number);
+    if (year && month && day) {
+      const localDate = new Date(year, month - 1, day);
+      
+      const today = new Date();
+      const todayTrunc = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const minBookingDate = new Date(todayTrunc.getTime() + 2 * 24 * 60 * 60 * 1000);
+      
+      if (localDate >= minBookingDate && localDate.getDay() !== 6) {
+         setSelectedDate(localDate);
+         setCurrentYear(localDate.getFullYear());
+         setCurrentMonth(localDate.getMonth());
+         
+         const nextSlots = getDynamicTimeSlots(localDate);
+         const firstAvailable = nextSlots.find(s => s.available);
+         if (firstAvailable) {
+           setSelectedTimeSlot(firstAvailable.time);
+         }
+      } else {
+         alert(lang === 'fr' ? 'Date invalide. Minimum 48h à l\'avance, et fermé le samedi.' : 'Invalid date. Minimum 48h advance notice, and closed on Saturdays.');
+      }
+    }
+  };
+
+  const formatDateForInput = (date: Date) => {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
   const handleProceedToDeposit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProduct) {
-      alert("Please select a lash look model style first.");
+      alert(b.alertSelectProduct);
       return;
     }
     if (!name.trim()) {
-      alert("Please enter your name.");
+      alert(b.alertName);
       return;
     }
     if (!email.trim() || !email.includes('@')) {
-      alert("Please enter a valid email address.");
+      alert(b.alertEmail);
       return;
     }
     if (!phone.trim() || phone.replace(/\D/g, '').length < 7) {
-      alert("Please enter your phone contact details.");
+      alert(b.alertPhone);
       return;
     }
 
-    // Auto-select first available slot if currently selected slot isn't available
     const findAvailable = activeTimeSlots.find(s => s.available);
     if (findAvailable && !activeTimeSlots.some(s => s.time === selectedTimeSlot && s.available)) {
       setSelectedTimeSlot(findAvailable.time);
@@ -204,37 +233,41 @@ export default function BookingForm({
     e.preventDefault();
     if (!selectedProduct) return;
     if (!name.trim() || !email.trim() || !phone.trim()) {
-      alert("Please provide name, email, and phone contact details to secure the booking.");
+      alert(b.alertContactDetails);
       return;
     }
     if (!cardNumber || cardNumber.replace(/\s/g, '').length < 16) {
-      alert("Please enter a valid 16-digit card number to pay the $25.00 booking deposit.");
+      alert(b.alertCardNumber);
       return;
     }
     if (!cardExpiry || cardExpiry.length < 5) {
-      alert("Please enter a valid expiration date (MM/YY).");
+      alert(b.alertExpiry);
       return;
     }
     if (!cardCvc || cardCvc.length < 3) {
-      alert("Please enter a valid CVV (3-digit security code).");
+      alert(b.alertCvc);
       return;
     }
 
+    // Always store dates in en-US for consistent comparison
     const formattedDate = selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+    const activeServiceOption = selectedProduct.serviceOptions?.find(o => o.id === selectedServiceOptionId);
+    const finalPrice = activeServiceOption ? activeServiceOption.price : selectedProduct.price;
 
     const newAppointment: Appointment = {
       id: `LASH-${Math.floor(100000 + Math.random() * 90000)}`,
       style: selectedProduct,
+      selectedServiceOption: activeServiceOption,
       artist: activeArtist,
       date: formattedDate,
       timeSlot: selectedTimeSlot,
       customerName: name,
       customerEmail: email,
       customerPhone: phone,
-      totalPrice: selectedProduct.price,
+      totalPrice: finalPrice,
     };
 
-    // Save locally
     const updated = [...bookedAppointments, newAppointment];
     setBookedAppointments(updated);
     localStorage.setItem('nashglam_appointments', JSON.stringify(updated));
@@ -242,7 +275,6 @@ export default function BookingForm({
     setConfirmedBooking(newAppointment);
     onBookingConfirmed(newAppointment);
     
-    // Clear forms but keep confirmation view
     setName('');
     setEmail('');
     setPhone('');
@@ -305,7 +337,7 @@ export default function BookingForm({
       `DTSTART:${dtStart}`,
       `DTEND:${dtEnd}`,
       `DTSTAMP:${dtStamp}`,
-      `DESCRIPTION:Your upcoming lash styling appointment with Stylist ${confirmedBooking.artist.name} is confirmed!\\nStyle: ${confirmedBooking.style.name}\\nArtist: ${confirmedBooking.artist.name}\\nDate: ${confirmedBooking.date}\\nTime: ${confirmedBooking.timeSlot}\\nDeposit paid.\\nLooking forward to styling you!`,
+      `DESCRIPTION:Your upcoming lash styling appointment with Stylist ${confirmedBooking.artist.name} is confirmed!\\nStyle: ${confirmedBooking.style.name} ${confirmedBooking.selectedServiceOption ? '(' + confirmedBooking.selectedServiceOption.label + ')' : ''}\\nArtist: ${confirmedBooking.artist.name}\\nDate: ${confirmedBooking.date}\\nTime: ${confirmedBooking.timeSlot}\\nDeposit paid.\\nLooking forward to styling you!`,
       'LOCATION:NashGlam Home Studio, Terrebonne, QC',
       'STATUS:CONFIRMED',
       'END:VEVENT',
@@ -325,6 +357,10 @@ export default function BookingForm({
 
   const activeProduct = selectedProduct || LASH_PRODUCTS[0];
 
+  // Display date in the current language
+  const displayDate = (d: Date) =>
+    d.toLocaleDateString(lang === 'fr' ? 'fr-CA' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
   return (
     <div className={`transition-all duration-300 border rounded-2xl p-6 sm:p-10 shadow-sm ${
       isDarkMode 
@@ -342,18 +378,30 @@ export default function BookingForm({
             exit={{ opacity: 0 }}
             className="space-y-6"
           >
-            <div className={`border-b pb-4 space-y-1 ${isDarkMode ? 'border-stone-800' : 'border-stone-200/60'}`}>
+            <div className={`border-b pb-4 space-y-2 ${isDarkMode ? 'border-stone-800' : 'border-stone-200/60'}`}>
               <span className="text-xs font-mono font-medium tracking-widest text-pink-500 uppercase">
-                Booking Concierge
+                {b.badge}
               </span>
               <h2 className={`font-serif text-2xl sm:text-3xl font-medium ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>
-                {bookingStep === 'form' ? 'Reserve Your Lash Therapy' : 'Secure Booking Deposit'}
+                {bookingStep === 'form' ? b.titleForm : b.titleDeposit}
               </h2>
               <p className={`font-sans text-xs sm:text-sm ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-                {bookingStep === 'form' 
-                  ? 'Each session includes a customized lash-bed diagnostic consultation, relaxing underbed collagen gel pads, micro-fanned lash mapping, and ultimate safety care.'
-                  : 'To hold your custom-styled lashes slot with Nash inside our calendar space, a private non-refundable $25 deposit is secured.'}
+                {bookingStep === 'form' ? b.descForm : b.descDeposit}
               </p>
+              {bookingStep === 'form' && (
+                <div className={`inline-flex items-center space-x-1.5 py-1.5 px-3 rounded-full text-[10px] font-mono font-semibold tracking-widest border ${
+                  isDarkMode
+                    ? 'bg-amber-950/30 border-amber-800/40 text-amber-400'
+                    : 'bg-amber-50 border-amber-200 text-amber-700'
+                }`}>
+                  <Clock className="w-3 h-3 shrink-0" />
+                  <span>
+                    {lang === 'fr'
+                      ? '⚠ RÉSERVATIONS REQUISES MINIMUM 48H À L\'AVANCE'
+                      : '⚠ BOOKINGS REQUIRE MINIMUM 48H ADVANCE NOTICE'}
+                  </span>
+                </div>
+              )}
             </div>
 
             <form onSubmit={bookingStep === 'form' ? handleProceedToDeposit : handleBookSubmit} className="space-y-6">
@@ -363,19 +411,22 @@ export default function BookingForm({
                   {/* 1. SELECT SERVICE TREATMENT */}
                   <div className="space-y-2">
                     <label className={`text-xs font-semibold tracking-widest block ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>
-                      1. SELECT TREATMENT LOOK
+                      {b.step1}
                     </label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {LASH_PRODUCTS.map((p) => (
                         <button
                           key={p.id}
                           type="button"
-                          onClick={() => onSelectProduct(p)}
+                          onClick={() => {
+                            onSelectProduct(p);
+                            setSelectedServiceOptionId('full');
+                          }}
                           className={`flex items-center justify-between p-3.5 border rounded-xl transition-all text-left cursor-pointer ${
                             selectedProduct?.id === p.id
                               ? isDarkMode 
-                                ? 'border-pink-500 bg-pink-95/30 bg-pink-950/30 text-stone-100 shadow-2xs' 
-                                : 'border-pink-500 bg-pink-5/40 bg-pink-50/40 text-stone-900 shadow-2xs'
+                                ? 'border-pink-500 bg-pink-950/30 text-stone-100 shadow-2xs' 
+                                : 'border-pink-500 bg-pink-50/40 text-stone-900 shadow-2xs'
                               : isDarkMode 
                                 ? 'border-stone-800 bg-stone-950 text-stone-400 hover:border-stone-700' 
                                 : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
@@ -384,30 +435,77 @@ export default function BookingForm({
                           <div>
                             <span className={`text-xs font-bold font-serif block ${selectedProduct?.id === p.id ? 'text-pink-500' : isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>{p.name}</span>
                             <span className="text-[10px] font-mono mt-0.5 text-stone-400 block uppercase">
-                              {p.type} • {p.durationMin} mins
+                              {p.type} • {p.durationMin} {b.mins}
                             </span>
                           </div>
-                          <span className={`text-sm font-bold ${selectedProduct?.id === p.id ? 'text-pink-500' : isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>${p.price}</span>
+                          <span className={`text-sm font-bold ${selectedProduct?.id === p.id ? 'text-pink-500' : isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>${p.price}.00</span>
                         </button>
                       ))}
                     </div>
                   </div>
 
+                  {/* Service Option Selection (Full Set vs Refill) */}
+                  {selectedProduct?.serviceOptions && (
+                    <div className="space-y-2 mt-4">
+                      <label className={`text-[10px] uppercase font-bold tracking-widest block ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
+                        {lang === 'fr' ? 'SÉLECTIONNEZ LE TYPE DE SERVICE' : 'SELECT SERVICE TYPE'}
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {selectedProduct.serviceOptions.map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => setSelectedServiceOptionId(opt.id)}
+                            className={`flex items-center justify-between p-3 border rounded-xl transition-all text-left cursor-pointer ${
+                              selectedServiceOptionId === opt.id
+                                ? isDarkMode 
+                                  ? 'border-pink-500 bg-pink-950/30 text-stone-100 shadow-2xs' 
+                                  : 'border-pink-500 bg-pink-50/40 text-stone-900 shadow-2xs'
+                                : isDarkMode 
+                                  ? 'border-stone-800 bg-stone-950 text-stone-400 hover:border-stone-700' 
+                                  : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
+                            }`}
+                          >
+                            <span className={`text-[11px] font-semibold ${selectedServiceOptionId === opt.id ? 'text-pink-500' : isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>
+                              {opt.label}
+                            </span>
+                            <span className={`text-[12px] font-bold ${selectedServiceOptionId === opt.id ? 'text-pink-500' : isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>
+                              ${opt.price}.00
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* 2. SELECT DATE CALENDAR & TIME SLOTS */}
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-1.5">
                     
-                    {/* Custom monthly calendar grid */}
+                    {/* Monthly calendar grid */}
                     <div className="space-y-2 lg:col-span-7">
-                      <label className={`text-xs font-semibold tracking-widest flex items-center space-x-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>
-                        <Calendar className="w-4 h-4 text-pink-500" />
-                        <span>2. SELECT BOOKING DATE</span>
-                      </label>
+                      <div className="flex items-center justify-between">
+                        <label className={`text-xs font-semibold tracking-widest flex items-center space-x-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>
+                          <Calendar className="w-4 h-4 text-pink-500" />
+                          <span>{b.step2}</span>
+                        </label>
+                        <input 
+                          type="date"
+                          value={formatDateForInput(selectedDate)}
+                          onChange={handleManualDateChange}
+                          min={formatDateForInput(new Date(new Date().getTime() + 2 * 24 * 60 * 60 * 1000))}
+                          className={`text-[10px] font-mono tracking-widest px-2.5 py-1.5 border rounded-lg outline-none transition-all cursor-pointer ${
+                            isDarkMode 
+                              ? 'bg-stone-900 border-stone-800 text-stone-300 focus:border-pink-500' 
+                              : 'bg-white border-stone-200 text-stone-700 focus:border-pink-500 shadow-2xs'
+                          }`}
+                        />
+                      </div>
                       
                       <div className={`p-4 rounded-xl border ${isDarkMode ? 'bg-stone-950/65 border-stone-800/85' : 'bg-white border-stone-200'} shadow-2xs`}>
                         {/* Month navigation header */}
                         <div className="flex items-center justify-between pb-3.5 pt-0.5">
                           <span className={`text-[11px] font-mono tracking-widest font-bold uppercase ${isDarkMode ? 'text-pink-400' : 'text-pink-600'}`}>
-                            {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][currentMonth]} {currentYear}
+                            {b.months[currentMonth]} {currentYear}
                           </span>
                           <div className="flex space-x-1.5">
                             <button
@@ -421,7 +519,7 @@ export default function BookingForm({
                                 }
                               }}
                               className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
-                                isDarkMode ? 'border-stone-850 hover:bg-stone-800/80 text-stone-300' : 'border-stone-200 hover:bg-stone-100 text-stone-700'
+                                isDarkMode ? 'border-stone-800 hover:bg-stone-800/80 text-stone-300' : 'border-stone-200 hover:bg-stone-100 text-stone-700'
                               }`}
                             >
                               <ChevronLeft className="w-3.5 h-3.5" />
@@ -437,7 +535,7 @@ export default function BookingForm({
                                 }
                               }}
                               className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
-                                isDarkMode ? 'border-stone-850 hover:bg-stone-800/80 text-stone-300' : 'border-stone-200 hover:bg-stone-100 text-stone-700'
+                                isDarkMode ? 'border-stone-800 hover:bg-stone-800/80 text-stone-300' : 'border-stone-200 hover:bg-stone-100 text-stone-700'
                               }`}
                             >
                               <ChevronRight className="w-3.5 h-3.5" />
@@ -445,18 +543,12 @@ export default function BookingForm({
                           </div>
                         </div>
 
-                        {/* Weekday indicator row */}
+                        {/* Weekday row */}
                         <div className="grid grid-cols-7 gap-1 text-center font-mono text-[9px] font-bold tracking-wider text-stone-400 uppercase border-b pb-2 mb-2.5 border-dashed border-stone-800/20 dark:border-stone-800/60">
-                          <span>Sun</span>
-                          <span>Mon</span>
-                          <span>Tue</span>
-                          <span>Wed</span>
-                          <span>Thu</span>
-                          <span>Fri</span>
-                          <span>Sat</span>
+                          {b.weekdays.map(d => <span key={d}>{d}</span>)}
                         </div>
 
-                        {/* Complete month cells rendering */}
+                        {/* Calendar day cells */}
                         <div className="grid grid-cols-7 gap-1.5">
                           {(() => {
                             const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay();
@@ -480,7 +572,9 @@ export default function BookingForm({
                               const today = new Date();
                               const todayTrunc = new Date(today.getFullYear(), today.getMonth(), today.getDate());
                               const cellTrunc = new Date(cellDate.getFullYear(), cellDate.getMonth(), cellDate.getDate());
-                              const isPast = cellTrunc < todayTrunc;
+                              // Block any date within the 48h advance-booking window
+                              const minBookingDate = new Date(todayTrunc.getTime() + 2 * 24 * 60 * 60 * 1000);
+                              const isPast = cellTrunc < minBookingDate;
                               
                               const isSelected = selectedDate &&
                                 selectedDate.getDate() === cellDate.getDate() &&
@@ -505,7 +599,7 @@ export default function BookingForm({
                                   : "bg-stone-900 border border-stone-800 text-stone-50 font-bold scale-[1.03] shadow-xs cursor-pointer ";
                               } else {
                                 buttonStyle += isDarkMode
-                                  ? "border border-stone-850 bg-stone-900 hover:bg-stone-800 hover:border-stone-700 text-stone-300 cursor-pointer "
+                                  ? "border border-stone-800 bg-stone-900 hover:bg-stone-800 hover:border-stone-700 text-stone-300 cursor-pointer "
                                   : "border border-stone-200 bg-white hover:bg-stone-100/60 text-stone-700 cursor-pointer ";
                               }
                               
@@ -527,6 +621,11 @@ export default function BookingForm({
                                   {isToday && !isSelected && (
                                     <span className="absolute bottom-1 w-1 h-1 rounded-full bg-pink-500 animate-pulse" />
                                   )}
+                                  {isSelected && (
+                                    <span className="text-[8px] font-mono leading-none opacity-80">
+                                      {b.monthsShort[cellDate.getMonth()]}
+                                    </span>
+                                  )}
                                   <span className={isSelected ? "font-bold text-xs" : "text-xs"}>
                                     {cellDayNum}
                                   </span>
@@ -538,11 +637,11 @@ export default function BookingForm({
                       </div>
                     </div>
 
-                    {/* Micro time slots */}
+                    {/* Time slots */}
                     <div className="space-y-2 lg:col-span-5">
                       <label className={`text-xs font-semibold tracking-widest flex items-center space-x-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>
                         <Clock className="w-4 h-4 text-pink-500" />
-                        <span>3. CHOOSE TIME</span>
+                        <span>{b.step3}</span>
                       </label>
 
                       <div className="grid grid-cols-2 gap-2">
@@ -562,8 +661,8 @@ export default function BookingForm({
                                   ? 'border-pink-500 bg-pink-950/35 text-pink-300 font-bold shadow-2xs'
                                   : 'border-pink-500 bg-pink-50 text-pink-700 font-bold shadow-2xs'
                                 : isDarkMode
-                                  ? 'border-stone-850 bg-stone-900 text-stone-300 hover:bg-stone-805 hover:bg-stone-800/80 cursor-pointer'
-                                  : 'border-stone-200 bg-white text-stone-650 hover:bg-stone-100/40 hover:bg-[#fcfbf9] cursor-pointer'
+                                  ? 'border-stone-800 bg-stone-900 text-stone-300 hover:bg-stone-800/80 cursor-pointer'
+                                  : 'border-stone-200 bg-white text-stone-650 hover:bg-[#fcfbf9] cursor-pointer'
                             }`}
                           >
                             {slot.time}
@@ -577,7 +676,7 @@ export default function BookingForm({
                   {/* 3. CLIENT CONTACT FORMS */}
                   <div className="space-y-3 pt-2">
                     <label className={`text-xs font-semibold tracking-widest block ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>
-                      4. GUEST INTAKE DETAILS
+                      {b.step4}
                     </label>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
@@ -588,7 +687,7 @@ export default function BookingForm({
                         <input
                           type="text"
                           required
-                          placeholder="Your Full Name *"
+                          placeholder={b.namePlaceholder}
                           value={name}
                           onChange={(e) => setName(e.target.value)}
                           className={`w-full border rounded-xl py-3 pl-10 pr-4 text-xs outline-none focus:ring-1 focus:ring-pink-500 hover:border-stone-300 transition-all font-medium ${
@@ -606,7 +705,7 @@ export default function BookingForm({
                         <input
                           type="email"
                           required
-                          placeholder="Email Address *"
+                          placeholder={b.emailPlaceholder}
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           className={`w-full border rounded-xl py-3 pl-10 pr-4 text-xs outline-none focus:ring-1 focus:ring-pink-500 hover:border-stone-300 transition-all font-medium ${
@@ -624,7 +723,7 @@ export default function BookingForm({
                         <input
                           type="tel"
                           required
-                          placeholder="Mobile Phone Number *"
+                          placeholder={b.phonePlaceholder}
                           value={phone}
                           onChange={(e) => setPhone(e.target.value)}
                           className={`w-full border rounded-xl py-3 pl-10 pr-4 text-xs outline-none focus:ring-1 focus:ring-pink-500 hover:border-stone-300 transition-all font-medium ${
@@ -641,7 +740,7 @@ export default function BookingForm({
                         <MessageSquare className="w-4 h-4" />
                       </div>
                       <textarea
-                        placeholder="Consultation notes, lash allergies, requested curl mapping details (optional)..."
+                        placeholder={b.notesPlaceholder}
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                         rows={2}
@@ -654,7 +753,7 @@ export default function BookingForm({
                     </div>
                   </div>
 
-                  {/* FINAL DIRECT BOOKING BUTTON BAR */}
+                  {/* CONFIRM BUTTON */}
                   <div className={`border-t pt-4.5 flex items-center justify-end flex-wrap gap-4 -mx-8 px-8 -mb-10 p-6 rounded-b-2xl ${
                     isDarkMode 
                       ? 'bg-stone-950 border-stone-800/80 text-stone-300' 
@@ -664,84 +763,81 @@ export default function BookingForm({
                       type="submit"
                       className="px-8 py-3.5 bg-pink-600 hover:bg-pink-700 border border-transparent rounded-xl text-xs font-sans font-bold tracking-widest text-white hover:shadow-md transition-all active:scale-95 cursor-pointer flex items-center space-x-2"
                     >
-                      <span>Confirm</span>
+                      <span>{b.confirm}</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
                 </>
               ) : (
                 <>
-                  {/* STEP 2: SECURED BILLING & DEPOSIT CONFIRMATION */}
+                  {/* STEP 2: DEPOSIT */}
                   
-                  {/* EDIT DETAILS TRIGGER */}
                   <button
                     type="button"
                     onClick={() => setBookingStep('form')}
                     className="flex items-center space-x-1.5 text-xs text-stone-400 hover:text-pink-500 transition-colors cursor-pointer font-bold uppercase tracking-wider font-mono outline-none pt-1"
                   >
-                    <span>← Edit Intake Details</span>
+                    <span>{b.editDetails}</span>
                   </button>
 
-                  {/* HIGH-RES BOOKING SUMMARY */}
+                  {/* BOOKING SUMMARY */}
                   <div className={`p-5 rounded-2xl border ${isDarkMode ? 'bg-stone-950/45 border-stone-800' : 'bg-white border-stone-200'} space-y-3.5 shadow-xs`}>
                     <h4 className="text-[10px] font-mono text-pink-500 uppercase font-extrabold tracking-widest block text-center sm:text-left">
-                      ★ RESERVATION INFORMATION SUMMARY ★
+                      {b.reservationSummary}
                     </h4>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 text-xs font-sans leading-relaxed text-center sm:text-left">
                       <div className="space-y-0.5">
-                        <span className="text-[9px] text-stone-400 font-mono tracking-wider block uppercase">LASH LOOK TREATMENT</span>
+                        <span className="text-[9px] text-stone-400 font-mono tracking-wider block uppercase">{b.lashLook}</span>
                         <span className={`font-serif font-bold block ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>{activeProduct.name}</span>
                         <span className="text-[10px] text-pink-500 block font-mono font-bold">${activeProduct.price}.00</span>
                       </div>
                       <div className="space-y-0.5">
-                        <span className="text-[9px] text-stone-400 font-mono tracking-wider block uppercase">DATE & TIME</span>
+                        <span className="text-[9px] text-stone-400 font-mono tracking-wider block uppercase">{b.dateTime}</span>
                         <span className={`font-semibold block ${isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>
-                          {selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                          {displayDate(selectedDate)}
                         </span>
                         <span className="text-pink-500 font-mono font-bold">{selectedTimeSlot}</span>
                       </div>
                       <div className="space-y-0.5">
-                        <span className="text-[9px] text-stone-400 font-mono tracking-wider block uppercase">MASTER STYLIST</span>
+                        <span className="text-[9px] text-stone-400 font-mono tracking-wider block uppercase">{b.masterStylist}</span>
                         <span className={`font-semibold block ${isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>Nash</span>
-                        <span className="text-stone-400 block text-[10px] font-light">Lead Stylist & Owner</span>
+                        <span className="text-stone-400 block text-[10px] font-light">{b.leadStylist}</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* DEPOSIT RULES & CHARGE */}
+                  {/* DEPOSIT POLICY */}
                   <div className="space-y-3 pt-1">
                     <label className={`text-xs font-semibold tracking-widest block ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>
-                      PLEASE READ before proceeding!
+                      {b.pleaseRead}
                     </label>
                     
                     <div className={`p-4 rounded-xl border text-xs leading-relaxed space-y-2 ${
                       isDarkMode ? 'bg-stone-950 border-stone-800 text-stone-300' : 'bg-white border-stone-200 text-stone-600'
                     }`}>
                       <div className="font-extrabold text-pink-600 font-sans tracking-wider uppercase text-[10px]">
-                        ★ DEPOSIT POLICY ★
+                        {b.depositPolicy}
                       </div>
-                      <p className="font-sans font-light leading-normal">
-                        A <strong className="font-semibold text-pink-500">$25.00 deposit</strong> is required to confirm your styled appointment. This deposit is <strong className="font-semibold text-pink-650 text-pink-600">non-refundable but transferable to a rescheduled appointment with 24 hours notice</strong>. If you reschedule prior to 24 hours before your booking, the $25.00 applies to your newly selected slot. However, if you cancel or reschedule late, the deposit will not be returned or applied.
-                      </p>
+                      <p className="font-sans font-light leading-normal" dangerouslySetInnerHTML={{ __html: b.depositText }} />
                     </div>
 
-                    {/* Card inputs container */}
+                    {/* Card inputs */}
                     <div className={`p-4.5 rounded-xl border max-w-md mx-auto space-y-3 ${
                       isDarkMode ? 'bg-stone-900/60 border-stone-800' : 'bg-stone-50 border-stone-200'
                     }`}>
-                      <span className="text-[10px] font-mono text-stone-400 block tracking-widest uppercase text-center">SECURE ENCRYPTED CHECKOUT</span>
+                      <span className="text-[10px] font-mono text-stone-400 block tracking-widest uppercase text-center">{b.secureCheckout}</span>
                       
                       <div className="relative">
                         <input
                           type="text"
                           required
                           maxLength={19}
-                          placeholder="Card Number (e.g. 4111 2222 3333 4444) *"
+                          placeholder={b.cardPlaceholder}
                           value={cardNumber}
                           onChange={handleCardNumberChange}
                           className={`w-full border rounded-xl py-2.5 px-3.5 text-xs outline-none focus:ring-1 focus:ring-pink-500 font-mono transition-all ${
                             isDarkMode
-                              ? 'bg-stone-950 border-stone-800 text-stone-100 placeholder-stone-605 focus:border-pink-500'
+                              ? 'bg-stone-950 border-stone-800 text-stone-100 placeholder-stone-500 focus:border-pink-500'
                               : 'bg-white border-stone-200 text-stone-800 placeholder-stone-400 focus:border-pink-500'
                           }`}
                         />
@@ -757,7 +853,7 @@ export default function BookingForm({
                           onChange={handleCardExpiryChange}
                           className={`w-full border rounded-xl py-2.5 px-3.5 text-xs outline-none focus:ring-1 focus:ring-pink-500 text-center font-mono transition-all ${
                             isDarkMode
-                              ? 'bg-stone-950 border-stone-800 text-stone-100 placeholder-stone-605 focus:border-pink-500'
+                              ? 'bg-stone-950 border-stone-800 text-stone-100 placeholder-stone-500 focus:border-pink-500'
                               : 'bg-white border-stone-200 text-stone-800 placeholder-stone-400 focus:border-pink-500'
                           }`}
                         />
@@ -770,7 +866,7 @@ export default function BookingForm({
                           onChange={handleCardCvcChange}
                           className={`w-full border rounded-xl py-2.5 px-3.5 text-xs outline-none focus:ring-1 focus:ring-pink-500 text-center font-mono transition-all ${
                             isDarkMode
-                              ? 'bg-stone-950 border-stone-800 text-stone-100 placeholder-stone-605 focus:border-pink-500'
+                              ? 'bg-stone-950 border-stone-800 text-stone-100 placeholder-stone-500 focus:border-pink-500'
                               : 'bg-white border-stone-200 text-stone-800 placeholder-stone-400 focus:border-pink-500'
                           }`}
                         />
@@ -778,7 +874,7 @@ export default function BookingForm({
                     </div>
                   </div>
 
-                  {/* FINAL CHECKOUT BOOK BUTTON */}
+                  {/* FINAL CHECKOUT BUTTON */}
                   <div className={`border-t pt-4.5 flex items-center justify-between flex-wrap gap-4 -mx-8 px-8 -mb-10 p-6 rounded-b-2xl ${
                     isDarkMode 
                       ? 'bg-stone-950 border-stone-800/80 text-stone-300' 
@@ -787,8 +883,8 @@ export default function BookingForm({
                     <div className="flex items-center space-x-3 text-stone-600 text-xs">
                       <Award className="w-8 h-8 text-pink-500 shrink-0" />
                       <div>
-                        <span className={`font-bold block font-sans ${isDarkMode ? 'text-stone-200' : 'text-stone-900'}`}>Secured Deposit Charge</span>
-                        <span className="font-light text-[11px] block text-stone-400">Formaldehyde-free luxury cashmere silk lashes.</span>
+                        <span className={`font-bold block font-sans ${isDarkMode ? 'text-stone-200' : 'text-stone-900'}`}>{b.securedDeposit}</span>
+                        <span className="font-light text-[11px] block text-stone-400">{b.cashmere}</span>
                       </div>
                     </div>
 
@@ -796,7 +892,7 @@ export default function BookingForm({
                       type="submit"
                       className="px-8 py-3.5 bg-pink-600 hover:bg-pink-700 border border-transparent rounded-xl text-xs font-sans font-bold tracking-widest text-white hover:shadow-md transition-all active:scale-95 cursor-pointer flex items-center space-x-2"
                     >
-                      <span>Let's get you booked!</span>
+                      <span>{b.getBooked}</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -807,7 +903,7 @@ export default function BookingForm({
           </motion.div>
         ) : (
           
-          /* --- DESIGNER VOUCHER SUCCESS STATE --- */
+          /* --- VOUCHER SUCCESS STATE --- */
           <motion.div
             key="voucher"
             initial={{ opacity: 0, scale: 0.95 }}
@@ -822,13 +918,13 @@ export default function BookingForm({
             </div>
 
             <h3 className={`font-serif text-2xl font-bold block text-center ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>
-              Appointment Confirmed!
+              {b.appointmentConfirmed}
             </h3>
             <p className={`font-sans text-xs text-center mt-1 max-w-sm ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-              We have dispatched your styling sequence blueprint to <span className={`font-semibold ${isDarkMode ? 'text-stone-200' : 'text-stone-700'}`}>{confirmedBooking.customerEmail}</span>. Read your voucher below.
+              {b.voucherEmailSent} <span className={`font-semibold ${isDarkMode ? 'text-stone-200' : 'text-stone-700'}`}>{confirmedBooking.customerEmail}</span>. {b.voucherRead}
             </p>
 
-            {/* Luxurious Printable-style Voucher */}
+            {/* Voucher */}
             <div className={`w-full max-w-sm border rounded-2xl shadow-md overflow-hidden font-mono mt-6 relative transition-colors ${
               isDarkMode 
                 ? 'bg-stone-950 border-stone-800 text-stone-300' 
@@ -838,76 +934,75 @@ export default function BookingForm({
               
               <div className="p-5 space-y-4">
                 
-                {/* Voucher Top Header */}
+                {/* Voucher Header */}
                 <div className={`flex items-center justify-between border-b pb-3 text-[10px] ${isDarkMode ? 'border-stone-800/60' : 'border-stone-200/60'}`}>
                   <div>
-                    <span className="font-bold block tracking-wider">LASH STUDIO VOUCHER</span>
+                    <span className="font-bold block tracking-wider">{b.voucherHeader}</span>
                     <span className="text-stone-400">{confirmedBooking.id}</span>
                   </div>
                   <div className="text-right">
                     <span className="bg-emerald-100 text-emerald-800 font-bold py-1 px-2 rounded-full uppercase text-[8px] tracking-widest text-emerald-500 inline-block">
-                      PAID DEPOSIT
+                      {b.paidDeposit}
                     </span>
                   </div>
                 </div>
 
-                {/* Treatment Style Details */}
+                {/* Treatment */}
                 <div className="space-y-1.5 text-xs">
-                  <span className="text-[9px] text-stone-400 block tracking-widest uppercase">TREATMENT & ARTIST</span>
+                  <span className="text-[9px] text-stone-400 block tracking-widest uppercase">{b.treatmentArtist}</span>
                   <div className={`font-serif font-bold text-sm ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>{confirmedBooking.style.name}</div>
                   <div className="flex items-center text-[10px] text-stone-500 space-x-1">
                     <CornerDownRight className="w-3.5 h-3.5 text-pink-600 shrink-0" />
-                    <span>Stylist: <span className={`font-semibold ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>{confirmedBooking.artist.name}</span></span>
+                    <span>{b.stylist} <span className={`font-semibold ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>{confirmedBooking.artist.name}</span></span>
                   </div>
                 </div>
 
-                {/* Date & Time grids */}
+                {/* Date & Time */}
                 <div className={`grid grid-cols-2 gap-4 border-t border-b py-3 text-xs ${isDarkMode ? 'border-stone-800' : 'border-stone-100'}`}>
                   <div>
-                    <span className="text-[9px] text-stone-400 block tracking-widest uppercase">SCHEDULED DATE</span>
+                    <span className="text-[9px] text-stone-400 block tracking-widest uppercase">{b.scheduledDate}</span>
                     <span className={`font-semibold ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>{confirmedBooking.date}</span>
                   </div>
                   <div>
-                    <span className="text-[9px] text-stone-400 block tracking-widest uppercase">ARRIVAL TIME</span>
+                    <span className="text-[9px] text-stone-400 block tracking-widest uppercase">{b.arrivalTime}</span>
                     <span className="font-semibold text-pink-600">{confirmedBooking.timeSlot}</span>
                   </div>
                 </div>
 
-                {/* Client contacts */}
+                {/* Client */}
                 <div className="space-y-1 text-xs">
-                  <span className="text-[9px] text-stone-400 block tracking-widest uppercase">GUEST DETAILS</span>
+                  <span className="text-[9px] text-stone-400 block tracking-widest uppercase">{b.guestDetails}</span>
                   <div className={`font-medium ${isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>{confirmedBooking.customerName}</div>
                   <div className="text-[10px] text-stone-450">{confirmedBooking.customerPhone}</div>
                 </div>
 
-                {/* Billing Summary on Voucher */}
+                {/* Billing */}
                 <div className={`border-t pt-3 space-y-1.5 text-xs ${isDarkMode ? 'border-stone-800' : 'border-stone-100'}`}>
-                  <span className="text-[9px] text-stone-400 block tracking-widest uppercase">BILLING SUMMARY</span>
+                  <span className="text-[9px] text-stone-400 block tracking-widest uppercase">{b.billingSummary}</span>
                   <div className="flex justify-between font-mono text-[11px]">
-                    <span>Treatment Set Price:</span>
+                    <span>{b.treatmentPrice}</span>
                     <span className={`font-semibold ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>${confirmedBooking.totalPrice}.00</span>
                   </div>
                   <div className="flex justify-between font-mono text-emerald-500 text-[11px]">
-                    <span>Deposit Secured/Paid:</span>
+                    <span>{b.depositPaid}</span>
                     <span className="font-bold">-$25.00</span>
                   </div>
                   <div className={`flex justify-between font-mono text-[11px] border-t pt-1 border-dashed ${isDarkMode ? 'border-stone-800' : 'border-stone-200'}`}>
-                    <span>Remaining Salon Due:</span>
+                    <span>{b.remainingDue}</span>
                     <span className="font-bold text-pink-500">${confirmedBooking.totalPrice - 25}.00</span>
                   </div>
                   <p className="text-[8px] text-pink-500 font-sans tracking-tight leading-normal font-light pt-1">
-                    * Policy: Deposit is non-refundable but transferable to a rescheduled appointment with 24 hours notice.
+                    {b.depositNote}
                   </p>
                 </div>
 
-                {/* Barcode representation */}
+                {/* Barcode */}
                 <div className={`pt-3 border-t flex flex-col items-center ${isDarkMode ? 'border-stone-800' : 'border-stone-100'}`}>
-                  {/* barcode stripes */}
                   <div className="w-full h-8 flex items-end justify-between px-4">
                     {Array.from({ length: 28 }).map((_, i) => (
                       <div
                         key={i}
-                        className={`rounded-xs ${isDarkMode ? 'bg-stone-305 bg-stone-300' : 'bg-stone-900'}`}
+                        className={`rounded-xs ${isDarkMode ? 'bg-stone-300' : 'bg-stone-900'}`}
                         style={{
                           width: i % 3 === 0 ? '4px' : i % 5 === 0 ? '1px' : '2px',
                           height: i % 4 === 0 ? '70%' : i % 3 === 0 ? '100%' : '85%',
@@ -932,14 +1027,14 @@ export default function BookingForm({
               }`}
             >
               <Calendar className="w-4 h-4 shrink-0 text-pink-500" />
-              <span>ADD TO CALENDAR (.ICS)</span>
+              <span>{b.addToCalendar}</span>
             </button>
 
             <button
               onClick={handleResetAppointment}
               className="mt-4 text-xs text-stone-500 hover:text-pink-600 font-sans tracking-wide border-b border-transparent hover:border-pink-500 pb-0.5 cursor-pointer"
             >
-              Book Another Treatment Slot Or Service
+              {b.bookAnother}
             </button>
           </motion.div>
         )}

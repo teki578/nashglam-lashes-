@@ -13,9 +13,19 @@ import BeautyFaqs from './components/BeautyFaqs';
 import CartDrawer from './components/CartDrawer';
 import { LASH_PRODUCTS } from './data';
 import { CartItem, Appointment, LashProduct } from './types';
+import { useLanguage } from './i18n/LanguageContext';
 
 import heroImg from './assets/images/lash_hero_banner_1781406354819.jpg';
-import cleanKitImg from './assets/images/lash_clean_kit_1781410195486.jpg';
+import cleanKitImg from './assets/images/lash_clean_kit_new.png';
+import cleanKitCarousel1 from './assets/images/lash_clean_kit_carousel_1.jpg';
+import cleanKitCarousel2 from './assets/images/lash_clean_kit_carousel_2.jpg';
+import lashClient1 from './assets/images/lash_client_1.jpg';
+import lashClient2 from './assets/images/lash_client_2.jpg';
+import lashClient3 from './assets/images/lash_client_3.jpg';
+import lashClient4 from './assets/images/lash_client_4.jpg';
+import lashClient5 from './assets/images/lash_client_5.jpg';
+
+const HERO_IMAGES = [cleanKitCarousel1, cleanKitCarousel2, lashClient1, lashClient2, lashClient3, lashClient4, lashClient5];
 
 const HERO_IMAGE = heroImg;
 
@@ -24,7 +34,7 @@ const CLEAN_KIT_PRODUCT: LashProduct = {
   name: 'Lash Cleaning Package',
   price: 20,
   type: 'Lash Care' as any,
-  description: 'Expertly formulated to eliminate make-up residues, oils, and environmental build-up while extending extension retention up to 6+ weeks.',
+  description: 'Expertly formulated to eliminate make-up residues, oils, and environmental build-up while extending extension retention up to 4+ weeks.',
   benefits: [
     'Deep cleansing bubble wash (60ml foaming bottle)',
     'Ultra-soft customized antimicrobial washing brush',
@@ -40,6 +50,11 @@ const CLEAN_KIT_PRODUCT: LashProduct = {
 };
 
 export default function App() {
+  const { t } = useLanguage();
+  const hero = t.hero;
+  const cat = t.catalog;
+  const foot = t.footer;
+
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>(() => {
     const saved = localStorage.getItem('nashglam_appointments');
@@ -55,6 +70,14 @@ export default function App() {
   const [lastConfirmedAppointment, setLastConfirmedAppointment] = useState<Appointment | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const [currentHeroImageIndex, setCurrentHeroImageIndex] = React.useState(0);
+
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentHeroImageIndex((prev) => (prev + 1) % HERO_IMAGES.length);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, []);
   
   // Set pre-filled product on booking scheduler
   const [selectedBookingProduct, setSelectedBookingProduct] = useState<LashProduct | null>(LASH_PRODUCTS[0]);
@@ -187,97 +210,76 @@ export default function App() {
       <main className="pb-16">
         
         {/* 2. MAJESTIC HERO SHOWCASE VIEW */}
-        <section id="hero" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-12 pb-14 sm:pb-20">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:items-center">
-            
-            {/* Left Content Column */}
-            <div className="space-y-6 lg:col-span-5 flex flex-col items-center lg:items-start text-center lg:text-left">
-              
-              {/* Premium tag */}
-              <div className={`inline-flex items-center space-x-2 py-1.5 px-3.5 rounded-full border text-xs font-mono font-medium tracking-wider ${
-                isDarkMode ? 'bg-pink-950/40 border-pink-900/50 text-pink-400' : 'bg-pink-50 border-pink-200 text-pink-800'
-              }`}>
-                <Sparkles className="w-3.5 h-3.5 text-pink-500 animate-pulse animate-duration-1000" />
-                <span>TERREBONNE HOME LASH STUDIO</span>
-              </div>
-
-              {/* Lash extensions crafted with care title segment */}
-              <div className="space-y-3">
-                <p className={`font-serif text-sm sm:text-base tracking-normal leading-relaxed font-normal ${isDarkMode ? 'text-stone-300' : 'text-stone-600'}`}>
-                  Lash extensions crafted with care, <br />
-                  from a home studio in Terrebonne.
+        <section id="hero" className="relative w-full min-h-[85vh] flex items-center justify-center overflow-hidden bg-stone-950">
+          {/* Background Carousel */}
+          <div className="absolute inset-0 z-0 flex">
+             <video
+               src="/hero_video.mov"
+               autoPlay
+               loop
+               muted
+               playsInline
+               className="w-full h-full object-cover absolute inset-0"
+             />
+             {/* Dark overlay for text readability */}
+             <div className="absolute inset-0 bg-stone-950/60 z-10" />
+          </div>
+          
+          {/* Foreground Text Elements */}
+          <div className="relative z-20 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center flex flex-col items-center justify-center space-y-8">
+             
+             {/* Premium tag */}
+             <div className="inline-flex items-center justify-center space-x-2 py-1.5 px-4 rounded-full border border-stone-500/30 bg-stone-900/40 backdrop-blur-md text-xs font-mono font-medium tracking-widest text-stone-300 shadow-xl">
+                <Sparkles className="w-3.5 h-3.5 text-stone-400" />
+                <span className="uppercase">{hero.tag}</span>
+             </div>
+             
+             {/* Grand Title */}
+             <div className="space-y-4 max-w-3xl">
+                <h1 className="font-serif text-5xl sm:text-6xl md:text-8xl tracking-tight text-white font-normal leading-[1.1] drop-shadow-2xl">
+                  {hero.title} <span className="text-pink-300 italic font-light">{hero.titleAccent}</span>
+                </h1>
+                <p className="font-sans text-base sm:text-lg text-stone-300 font-light max-w-xl mx-auto leading-relaxed drop-shadow-md">
+                  {hero.subtitle}
                 </p>
-              </div>
+             </div>
 
-              {/* Action buttons (Move directly under the studio description) */}
-              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+             {/* Call to Actions */}
+             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6 w-full sm:w-auto">
                 <button
                   onClick={() => handleScrollTo('booking')}
-                  className={`px-8 py-4 rounded-xl text-xs font-bold font-sans tracking-widest transition-all cursor-pointer shadow-md text-center ${
-                    isDarkMode 
-                      ? 'bg-pink-600 text-white hover:bg-pink-500 shadow-pink-950/30' 
-                      : 'bg-pink-600 text-white hover:bg-pink-700 shadow-pink-600/20'
-                  }`}
+                  className="w-full sm:w-auto px-10 py-4 rounded-full text-xs font-bold font-sans tracking-widest transition-all cursor-pointer bg-stone-100 text-stone-950 hover:bg-white hover:scale-105 shadow-xl border border-transparent"
                 >
-                  BOOK YOUR SET
+                  {hero.ctaPrimary}
                 </button>
                 <button
                   onClick={() => handleScrollTo('catalog')}
-                  className={`px-8 py-4 rounded-xl text-xs font-bold font-sans tracking-widest transition-all cursor-pointer text-center border ${
-                    isDarkMode 
-                      ? 'bg-stone-950 border-stone-800 text-stone-300 hover:border-stone-700' 
-                      : 'bg-white border-stone-200 hover:border-stone-400 text-stone-700'
-                  }`}
+                  className="w-full sm:w-auto px-10 py-4 rounded-full text-xs font-bold font-sans tracking-widest transition-all cursor-pointer border border-stone-400 text-stone-100 bg-stone-900/30 backdrop-blur-md hover:bg-stone-800/50 hover:border-stone-300"
                 >
-                  SHOP LASH CLEAN KIT
+                  {hero.ctaSecondary}
                 </button>
-              </div>
-
-            </div>
-
-            {/* Right Graphics/Image Column with floating atmospheric elements */}
-            <div className="lg:col-span-7 flex justify-center">
-              <div className={`relative w-full max-w-[540px] aspect-[16/10] rounded-3xl overflow-hidden shadow-lg border flex items-center justify-center group ${
-                isDarkMode ? 'bg-stone-900 border-stone-800' : 'bg-stone-200 border-stone-200/60'
-              }`}>
-                <img
-                  src={HERO_IMAGE}
-                  alt="Elegant luxury eyelashes close up details"
-                  className="w-full h-full object-cover group-hover:scale-[1.01] transition-transform duration-1000"
-                  referrerPolicy="no-referrer"
-                />
-                
-                {/* Visual Glassmorphed labels to reinforce craft details */}
-                <div className="absolute top-4 left-4 bg-white/20 hover:bg-white/35 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20 text-white text-[10px] uppercase font-mono tracking-widest transition-all">
-                  • 1:1 Elite Isolation
-                </div>
-
-                <div className="absolute bottom-4 right-4 bg-white/20 hover:bg-white/35 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20 text-white text-[10px] uppercase font-mono tracking-widest transition-all">
-                  • Long Retention Curvature
-                </div>
-                
-                <div className="absolute bottom-12 left-4 bg-stone-900/40 hover:bg-stone-900/65 backdrop-blur-md px-3 py-1 rounded-md text-[#f5f5f4] text-[9px] uppercase font-mono tracking-widest transition-all">
-                  CC-Curl • {LASH_PRODUCTS[1].thickness}
-                </div>
-              </div>
-            </div>
-
+             </div>
+             
+             <div className="pt-8 text-[10px] uppercase tracking-[0.3em] font-mono text-stone-400/80 flex flex-col items-center space-y-2">
+               <span>{hero.scrollLabel}</span>
+               <div className="w-[1px] h-8 bg-stone-400/50" />
+             </div>
           </div>
         </section>
 
         {/* 4. LASH CARE & HYGIENE SHOP (RESETS THE BESPOKE CATALOG AND SELLS CLEANING KIT) */}
         <section id="catalog" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 space-y-12">
              <div className="text-center space-y-2 max-w-xl mx-auto">
-            <span className={`text-xs font-mono font-medium tracking-widest uppercase px-3 py-1 rounded-full border ${
+             <span className={`text-xs font-mono font-medium tracking-widest uppercase px-3 py-1 rounded-full border ${
               isDarkMode ? 'bg-pink-950/40 border-pink-900/30 text-pink-400' : 'bg-pink-50 border-pink-200/40 text-pink-700'
             }`}>
-              Hygiene Essentials
+              {cat.badge}
             </span>
             <h2 className={`font-serif text-3xl sm:text-4xl tracking-tight font-medium ${isDarkMode ? 'text-stone-50' : 'text-stone-900'}`}>
-              NashGlam Lash Clean Kit
+              {cat.title}
             </h2>
             <p className={`font-sans text-xs sm:text-sm font-light leading-relaxed ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-              Maintain professional retention after your appointments. Our oil-free cleansing solution works to preserve fiber bonds and keep your lashes fluffy and clean.
+              {cat.subtitle}
             </p>
           </div>
 
@@ -297,11 +299,11 @@ export default function App() {
                 />
                 
                 <div className="absolute top-4 left-4 bg-pink-600 text-white text-[9px] uppercase font-mono tracking-widest font-bold py-1 px-3 rounded-full shadow-sm">
-                  ★ BEST-SELLER
+                  {cat.bestSeller}
                 </div>
 
                 <div className="absolute bottom-4 right-4 bg-black/60 text-white text-[10px] uppercase font-mono tracking-widest py-1 px-3 rounded-md backdrop-blur-xs">
-                  pH 5.5 Tear-Free Formula
+                  {cat.formula}
                 </div>
               </div>
 
@@ -311,27 +313,27 @@ export default function App() {
                   
                   <div className="flex justify-between items-start">
                     <div>
-                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-pink-500">RETENTION MAXIMIZER</span>
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-pink-500">{cat.retentionMaximizer}</span>
                       <h3 className={`font-serif text-2xl font-semibold leading-tight mt-1 ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>
-                        Lash Cleaning Package
+                        {cat.productName}
                       </h3>
                     </div>
                     <span className="text-2xl font-serif font-black text-pink-600 block pl-3">
-                      ${CLEAN_KIT_PRODUCT.price}
+                      ${CLEAN_KIT_PRODUCT.price}.00
                     </span>
                   </div>
 
                   <p className={`text-xs sm:text-sm leading-relaxed font-sans font-light ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-                    {CLEAN_KIT_PRODUCT.description}
+                    {cat.description}
                   </p>
 
                   {/* Benefits checklist */}
                   <div className={`space-y-2 p-4 rounded-xl border ${
                     isDarkMode ? 'bg-stone-950/60 border-stone-800' : 'bg-stone-50 border-stone-100'
                   }`}>
-                    <span className="text-[9px] font-mono font-bold text-stone-400 uppercase tracking-widest block">PACKAGE INCLUSIONS:</span>
+                    <span className="text-[9px] font-mono font-bold text-stone-400 uppercase tracking-widest block">{cat.inclusionsLabel}</span>
                     <div className="grid grid-cols-1 gap-2.5 mt-1.5">
-                      {CLEAN_KIT_PRODUCT.benefits.map((benefit, idx) => (
+                      {cat.benefits.map((benefit, idx) => (
                         <div key={idx} className={`flex items-start text-xs ${isDarkMode ? 'text-stone-300' : 'text-stone-600'}`}>
                           <Check className="w-3.5 h-3.5 text-pink-500 mr-2 mt-0.5 shrink-0" />
                           <span className="font-light">{benefit}</span>
@@ -379,12 +381,12 @@ export default function App() {
                     {showCleanKitAdded ? (
                       <>
                         <Check className="w-4 h-4 text-emerald-300 animate-pulse" />
-                        <span>ADDED TO YOUR BAG</span>
+                        <span>{cat.addedToBag}</span>
                       </>
                     ) : (
                       <>
                         <ShoppingBag className="w-4 h-4" />
-                        <span>ADD PACKAGE TO BAG</span>
+                        <span>{cat.addToBag}</span>
                       </>
                     )}
                   </button>
@@ -431,10 +433,10 @@ export default function App() {
               NASHGLAM <span className="font-light italic text-pink-500">LASHES</span>
             </span>
             <p className="text-xs text-stone-400 font-light leading-relaxed">
-              Dedicated exclusively to custom-designed eyelash aesthetics. Handcrafted fiber fans with professional isolation guarantees.
+              {foot.tagline}
             </p>
             <div className="flex space-x-3 pt-2 text-stone-400">
-              <a href="#instagram" className="hover:text-pink-500 transition-colors">
+              <a href="https://www.instagram.com/nashglam.lashes/" target="_blank" rel="noopener noreferrer" className="hover:text-pink-500 transition-colors">
                 <Instagram className="w-4 h-4" />
               </a>
               <a href="#booking" className="hover:text-pink-500 transition-colors">
@@ -446,19 +448,15 @@ export default function App() {
           {/* Location Col */}
           <div className="space-y-4">
             <h4 className="text-xs uppercase font-mono tracking-widest font-semibold text-stone-200">
-              STUDIO LOCATION
+              {foot.studioLocation}
             </h4>
             <div className="space-y-2 text-xs text-stone-400">
               <div className="flex items-start space-x-2">
                 <MapPin className="w-4 h-4 text-pink-500 shrink-0 mt-0.5" />
                 <span>
-                  Private Home Studio <br />
-                  Terrebonne, QC, Canada
+                  {foot.locationText} <br />
+                  {foot.locationCity}
                 </span>
-              </div>
-              <div className="flex items-center space-x-2 pt-1 border-t border-stone-800">
-                <Phone className="w-4 h-4 text-pink-500 shrink-0" />
-                <span>(450) 555-0145</span>
               </div>
             </div>
           </div>
@@ -466,15 +464,15 @@ export default function App() {
           {/* Operating hours Col */}
           <div className="space-y-4">
             <h4 className="text-xs uppercase font-mono tracking-widest font-semibold text-stone-200">
-              OPERATING HOURS
+              {foot.hours}
             </h4>
             <div className="space-y-2 text-xs text-stone-400">
               <div className="flex items-start space-x-2">
                 <Clock className="w-4 h-4 text-pink-500 shrink-0 mt-0.5" />
                 <span>
-                  Mon - Fri: 09:00 AM - 08:00 PM <br />
-                  Sat: Closed <br />
-                  Sun: 10:00 AM - 06:00 PM
+                  {foot.hoursText} <br />
+                  {foot.satText} <br />
+                  {foot.sunText}
                 </span>
               </div>
             </div>
@@ -483,20 +481,20 @@ export default function App() {
           {/* Safe hygiene certification logos */}
           <div className="space-y-4">
             <h4 className="text-xs uppercase font-mono tracking-widest font-semibold text-stone-200">
-              SAFETY ACCREDITATION
+              {foot.safety}
             </h4>
             <div className="space-y-3">
               <div className="flex items-center space-x-2 text-xs text-stone-400">
                 <CheckCircle2 className="w-4 h-4 text-pink-500 shrink-0" />
-                <span>NEESA Certified Stylists</span>
+                <span>{foot.cert1}</span>
               </div>
               <div className="flex items-center space-x-2 text-xs text-stone-400">
                 <CheckCircle2 className="w-4 h-4 text-pink-500 shrink-0" />
-                <span>Formaldehyde-Free Bonding</span>
+                <span>{foot.cert2}</span>
               </div>
               <div className="flex items-center space-x-2 text-xs text-stone-400">
                 <CheckCircle2 className="w-4 h-4 text-pink-500 shrink-0" />
-                <span>Sanitized Precision Tools</span>
+                <span>{foot.cert3}</span>
               </div>
             </div>
           </div>
@@ -505,7 +503,7 @@ export default function App() {
 
         {/* Sub bottom credits */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 pt-8 border-t border-stone-800 text-center text-[10px] text-stone-500">
-          <p>© {new Date().getFullYear()} NashGlam Lashes. All rights reserved. Elegant web design crafted for beauty excellence.</p>
+          <p>{foot.copyright(new Date().getFullYear())}</p>
         </div>
       </footer>
 

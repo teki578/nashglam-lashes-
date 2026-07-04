@@ -415,7 +415,7 @@ export default function InteractiveCustomizer({
                     onClick={() => onAddCustomSetToCart(recommendedProduct, quizRecommendation.curl, '12mm')}
                     className="flex-1 py-3 bg-stone-900 border border-stone-900 rounded-xl text-xs font-semibold tracking-wider text-white hover:bg-stone-800 transition-all cursor-pointer text-center"
                   >
-                    ADD REC SET TO BAG (${recommendedProduct.price})
+                    ADD REC SET TO BAG (${recommendedProduct.price}.00)
                   </button>
                   <button
                     onClick={() => onBookCustomSet(recommendedProduct)}

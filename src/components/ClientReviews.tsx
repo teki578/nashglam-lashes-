@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Star, MessageSquare, BadgeCheck, Send, Quote } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface Review {
   id: string;
@@ -46,6 +47,9 @@ interface ClientReviewsProps {
 }
 
 export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps) {
+  const { t, lang } = useLanguage();
+  const r = t.reviews;
+
   const [reviews, setReviews] = useState<Review[]>([]);
   const [name, setName] = useState('');
   const [rating, setRating] = useState(5);
@@ -54,7 +58,6 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
 
-  // Load reviews from localStorage or fall back to defaults
   useEffect(() => {
     const saved = localStorage.getItem('nashglam_reviews');
     if (saved) {
@@ -73,11 +76,11 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
     setError('');
 
     if (!name.trim()) {
-      setError('Please provide your name to register your review.');
+      setError(r.errorName);
       return;
     }
     if (!text.trim() || text.length < 10) {
-      setError('Please write a detailed review (at least 10 characters) about your experience.');
+      setError(r.errorText);
       return;
     }
 
@@ -85,17 +88,16 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
       id: `rev-user-${Date.now()}`,
       name: name.trim(),
       rating,
-      date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+      date: new Date().toLocaleDateString(lang === 'fr' ? 'fr-CA' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
       text: text.trim(),
       service,
-      verified: true, // Auto-verify client additions in preview sandbox
+      verified: true,
     };
 
     const updated = [newReview, ...reviews];
     setReviews(updated);
     localStorage.setItem('nashglam_reviews', JSON.stringify(updated));
 
-    // Reset form states
     setName('');
     setText('');
     setRating(5);
@@ -108,7 +110,7 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
 
   const getAverageRating = () => {
     if (reviews.length === 0) return 0;
-    const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
+    const sum = reviews.reduce((acc, rev) => acc + rev.rating, 0);
     return (sum / reviews.length).toFixed(1);
   };
 
@@ -118,19 +120,19 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
         <span className={`text-xs font-mono font-medium tracking-widest uppercase px-3 py-1 rounded-full border ${
           isDarkMode ? 'bg-pink-950/40 border-pink-900/30 text-pink-400' : 'bg-pink-50 border-pink-200/40 text-pink-700'
         }`}>
-          Client Diaries
+          {r.badge}
         </span>
         <h2 className={`font-serif text-3xl sm:text-4xl tracking-tight font-medium ${isDarkMode ? 'text-stone-50' : 'text-stone-900'}`}>
-          NashGlam Client Reviews
+          {r.title}
         </h2>
         <p className={`font-sans text-xs sm:text-sm font-light leading-relaxed ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-          Read candid reviews from our beautiful community, or leave your own review below to share your custom style experience.
+          {r.subtitle}
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
-        {/* Left Column: Form component to submit reviews */}
+        {/* Review Form */}
         <div className={`lg:col-span-5 p-6 sm:p-8 rounded-2xl space-y-6 border transition-all ${
           isDarkMode 
             ? 'bg-stone-900 border-stone-800 text-stone-100 shadow-stone-950/20' 
@@ -139,17 +141,17 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
           <div className="space-y-1.5">
             <h3 className={`font-serif text-xl font-medium tracking-tight flex items-center space-x-2 ${isDarkMode ? 'text-stone-50' : 'text-stone-900'}`}>
               <MessageSquare className="w-5 h-5 text-pink-500" />
-              <span>Leave a Review</span>
+              <span>{r.leaveReview}</span>
             </h3>
             <p className={`text-xs font-sans font-light ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-              Your feedback helps us maintain our beauty & luxury service standards.
+              {r.leaveReviewDesc}
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {submitted && (
-              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs p-3.5 rounded-xl leading-relaxed animate-fade-in">
-                <strong>Thank you, beautiful!</strong> Your review has been saved in local state and published successfully below.
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs p-3.5 rounded-xl leading-relaxed">
+                {r.thankYou}
               </div>
             )}
 
@@ -159,14 +161,14 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
               </div>
             )}
 
-            {/* Name Input */}
+            {/* Name */}
             <div className="space-y-1.5">
               <label className={`text-[10px] font-bold tracking-widest uppercase block ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-                Your Full Name
+                {r.nameLabel}
               </label>
               <input
                 type="text"
-                placeholder="e.g. Charlotte Rose"
+                placeholder={r.namePlaceholder}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className={`w-full border rounded-xl py-3 px-4 text-xs font-sans outline-none focus:ring-1 focus:ring-pink-500 transition-all ${
@@ -177,10 +179,10 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
               />
             </div>
 
-            {/* Star Rating Select */}
+            {/* Star Rating */}
             <div className="space-y-1.5">
               <label className={`text-[10px] font-bold tracking-widest uppercase block ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-                Star Rating
+                {r.starLabel}
               </label>
               <div className="flex items-center space-x-2">
                 {[1, 2, 3, 4, 5].map((starValue) => (
@@ -201,15 +203,15 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
                   </button>
                 ))}
                 <span className={`text-xs font-mono font-bold ml-2 ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-                  {rating} of 5
+                  {rating} {r.of5}
                 </span>
               </div>
             </div>
 
-            {/* Treatment Selector */}
+            {/* Service */}
             <div className="space-y-1.5">
               <label className={`text-[10px] font-bold tracking-widest uppercase block ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-                Lash Service / Product
+                {r.serviceLabel}
               </label>
               <select
                 value={service}
@@ -228,14 +230,14 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
               </select>
             </div>
 
-            {/* Review feedback text */}
+            {/* Review Text */}
             <div className="space-y-1.5">
               <label className={`text-[10px] font-bold tracking-widest uppercase block ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-                Your Review
+                {r.reviewLabel}
               </label>
               <textarea
                 rows={4}
-                placeholder="Share details of your lash retention, lashes soft feel, and custom mapping results..."
+                placeholder={r.reviewPlaceholder}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 className={`w-full border rounded-xl py-3 px-4 text-xs font-sans outline-none focus:ring-1 focus:ring-pink-500 transition-all resize-none leading-relaxed ${
@@ -251,23 +253,23 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
               className="w-full py-3.5 bg-stone-900 hover:bg-pink-600 text-[#f5f5f4] hover:text-stone-50 rounded-xl text-xs font-bold tracking-widest transition-all shadow-sm cursor-pointer flex items-center justify-center space-x-2"
             >
               <Send className="w-3.5 h-3.5" />
-              <span>PUBLISH MY REVIEW</span>
+              <span>{r.publish}</span>
             </button>
           </form>
         </div>
 
-        {/* Right Column: Reviews Board list */}
+        {/* Reviews Board */}
         <div className="lg:col-span-7 space-y-6">
           
-          {/* Reviews Score Banner Summary */}
+          {/* Community Score */}
           <div className={`border p-5 rounded-2xl flex items-center justify-between shadow-xs transition-colors ${
             isDarkMode ? 'bg-stone-900 border-stone-800' : 'bg-white border-stone-200'
           }`}>
             <div className="space-y-0.5">
-              <span className="text-[10px] font-mono text-stone-400 block tracking-wider uppercase">COMMUNITY SCORE</span>
+              <span className="text-[10px] font-mono text-stone-400 block tracking-wider uppercase">{r.communityScore}</span>
               <div className="flex items-baseline space-x-2">
                 <span className={`font-serif text-3xl font-extrabold ${isDarkMode ? 'text-stone-50' : 'text-stone-900'}`}>{getAverageRating()}</span>
-                <span className="text-stone-400 text-xs font-sans font-light">/ 5.0 rating</span>
+                <span className="text-stone-400 text-xs font-sans font-light">{r.ratingOf}</span>
               </div>
             </div>
 
@@ -275,11 +277,11 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
               {[1, 2, 3, 4, 5].map((starNum) => (
                 <Star key={starNum} className="w-5 h-5 fill-pink-500 text-pink-500 shrink-0" />
               ))}
-              <span className={`text-xs font-mono font-bold ml-2 ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>({reviews.length} reviews)</span>
+              <span className={`text-xs font-mono font-bold ml-2 ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>({reviews.length} {r.reviews})</span>
             </div>
           </div>
 
-          {/* List of client logs */}
+          {/* Review list */}
           <div className={`space-y-4 max-h-[580px] overflow-y-auto pr-2 flex flex-col divide-y ${
             isDarkMode ? 'divide-stone-800' : 'divide-stone-100'
           }`}>
@@ -296,7 +298,7 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
                             : 'bg-emerald-50 text-emerald-800 border-emerald-200/50'
                         }`}>
                           <BadgeCheck className="w-3 h-3 text-emerald-600 shrink-0" />
-                          <span>Verified Client</span>
+                          <span>{r.verifiedClient}</span>
                         </span>
                       )}
                     </div>
@@ -305,7 +307,6 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
                   <span className="text-[10px] font-sans text-stone-400 font-light">{rev.date}</span>
                 </div>
 
-                {/* Stars container */}
                 <div className="flex items-center text-pink-500">
                   {[1, 2, 3, 4, 5].map((itemVal) => (
                     <Star
@@ -317,7 +318,6 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
                   ))}
                 </div>
 
-                {/* Testimonial body */}
                 <div className={`relative pl-4 border-l text-xs sm:text-sm leading-relaxed font-sans font-light italic ${
                   isDarkMode ? 'border-stone-800 text-stone-300' : 'border-stone-200 text-stone-600'
                 }`}>

@@ -24,6 +24,12 @@ export enum LashVibe {
   DOLL_EYE = 'Open Doll-Eye',
 }
 
+export interface ServiceOption {
+  id: string;
+  label: string;
+  price: number;
+}
+
 export interface LashProduct {
   id: string;
   name: string;
@@ -37,6 +43,7 @@ export interface LashProduct {
   thickness: string;
   durationMin: number;
   image: string;
+  serviceOptions?: ServiceOption[];
 }
 
 export interface LashArtist {
@@ -65,6 +72,7 @@ export interface CartItem {
 export interface Appointment {
   id: string;
   style: LashProduct;
+  selectedServiceOption?: ServiceOption;
   artist: LashArtist;
   date: string;
   timeSlot: string;

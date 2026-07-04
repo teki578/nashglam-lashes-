@@ -47,7 +47,7 @@ export default function SetCard({
         
         {/* Dynamic price bubble */}
         <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm shadow-xs border border-stone-100 py-1.5 px-3.5 rounded-full">
-          <span className="font-serif text-lg font-bold text-stone-900">${product.price}</span>
+          <span className="font-serif text-lg font-bold text-stone-900">${product.price}.00</span>
         </div>
 
         {/* Mini duration tag */}

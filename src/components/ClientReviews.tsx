@@ -12,35 +12,7 @@ interface Review {
   verified: boolean;
 }
 
-const INITIAL_REVIEWS: Review[] = [
-  {
-    id: 'rev-1',
-    name: 'Alessia Thorne',
-    rating: 5,
-    date: 'June 10, 2026',
-    text: 'NashGlam has completely transformed my lash routine! Sophie Laurent creates the most perfect, fluffy hand-fanned volumes that keep their retention for a full six weeks. I am absolutely obsessed and refuse to go anywhere else!',
-    service: 'Volume',
-    verified: true,
-  },
-  {
-    id: 'rev-2',
-    name: 'Camila Vance',
-    rating: 5,
-    date: 'May 28, 2026',
-    text: 'I purchased the Lash Cleaning Package alongside my appointment. Clean, oil-free formula with the softest micro-brush, it has single-handedly saved my hybrid lashes from fallout. Simply flawless service and products!',
-    service: 'Hybrid',
-    verified: true,
-  },
-  {
-    id: 'rev-3',
-    name: 'Eleanor Sterling',
-    rating: 4,
-    date: 'June 02, 2026',
-    text: 'Incredibly precise booking and clean boutique. The classic set feels weightless, and the custom mapping designed fits my rounded eyes perfectly. A true luxury experience.',
-    service: 'Classic',
-    verified: true,
-  },
-];
+const INITIAL_REVIEWS: Review[] = [];
 
 interface ClientReviewsProps {
   isDarkMode?: boolean;
@@ -59,10 +31,16 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const saved = localStorage.getItem('nashglam_reviews');
+    const saved = localStorage.getItem('nashglam_reviews_v2');
     if (saved) {
       try {
-        setReviews(JSON.parse(saved));
+        let parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          parsed = parsed.filter((r: Review) => !['rev-1', 'rev-2', 'rev-3'].includes(r.id));
+          setReviews(parsed);
+        } else {
+          setReviews(INITIAL_REVIEWS);
+        }
       } catch (e) {
         setReviews(INITIAL_REVIEWS);
       }
@@ -96,7 +74,7 @@ export default function ClientReviews({ isDarkMode = false }: ClientReviewsProps
 
     const updated = [newReview, ...reviews];
     setReviews(updated);
-    localStorage.setItem('nashglam_reviews', JSON.stringify(updated));
+    localStorage.setItem('nashglam_reviews_v2', JSON.stringify(updated));
 
     setName('');
     setText('');

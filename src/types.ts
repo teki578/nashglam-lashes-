@@ -80,4 +80,5 @@ export interface Appointment {
   customerEmail: string;
   customerPhone: string;
   totalPrice: number;
+  status?: 'confirmed' | 'cancelled' | 'no-show';
 }

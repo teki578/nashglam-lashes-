@@ -5,7 +5,42 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      {
+        name: 'vercel-api-mock',
+        configureServer(server) {
+          server.middlewares.use('/api/create-payment-intent', async (req, res, next) => {
+            try {
+              const modulePath = path.join(process.cwd(), 'api', 'create-payment-intent.js');
+              const fileUrl = 'file://' + modulePath.replace(/\\/g, '/') + '?t=' + Date.now();
+              const handler = await import(/* @vite-ignore */ fileUrl);
+
+              if (req.method === 'POST') {
+                let body = '';
+                req.on('data', chunk => { body += chunk.toString(); });
+                req.on('end', async () => {
+                  try {
+                    if (body) req.body = JSON.parse(body);
+                  } catch (e) {
+                    res.statusCode = 400;
+                    return res.end(JSON.stringify({ error: 'Invalid JSON' }));
+                  }
+                  await handler.default(req, res);
+                });
+              } else {
+                await handler.default(req, res);
+              }
+            } catch (err) {
+              console.error('API Error:', err);
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: err.message }));
+            }
+          });
+        }
+      }
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

@@ -4,17 +4,24 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { doc, updateDoc, setDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, User, Phone, Mail, Clock, MessageSquare, CheckCircle, Award, Star, ArrowRight, CornerDownRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { LashProduct, LashArtist, Appointment } from '../types';
 import { LASH_ARTISTS, LASH_PRODUCTS } from '../data';
 import { useLanguage } from '../i18n/LanguageContext';
+import { onSnapshot, collection } from 'firebase/firestore';
+import { AvailabilitySettings } from './AdminDashboard';
+import { CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
 interface BookingFormProps {
   selectedProduct: LashProduct | null;
   onBookingConfirmed: (appointment: Appointment) => void;
-  onSelectProduct: (product: LashProduct) => void;
+  onSelectProduct: (product: LashProduct | null) => void;
   isDarkMode?: boolean;
+  reschedulingAppointment?: Appointment | null;
+  onCancelReschedule?: () => void;
 }
 
 export default function BookingForm({
@@ -22,12 +29,19 @@ export default function BookingForm({
   onBookingConfirmed,
   onSelectProduct,
   isDarkMode = false,
+  reschedulingAppointment,
+  onCancelReschedule,
 }: BookingFormProps) {
   const { t, lang } = useLanguage();
   const b = t.booking;
 
   const [activeArtist, setActiveArtist] = useState<LashArtist>(LASH_ARTISTS[0]);
   const [bookingStep, setBookingStep] = useState<'form' | 'deposit'>('form');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  
+  const stripe = useStripe();
+  const elements = useElements();
   
   // Calendar Month and Selected Day state
   const getInitialSelectedDate = () => {
@@ -41,43 +55,39 @@ export default function BookingForm({
     return target;
   };
 
-  const [selectedDate, setSelectedDate] = useState<Date>(getInitialSelectedDate);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [currentYear, setCurrentYear] = useState(() => getInitialSelectedDate().getFullYear());
   const [currentMonth, setCurrentMonth] = useState(() => getInitialSelectedDate().getMonth());
   
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState('11:00 AM');
-  const [selectedServiceOptionId, setSelectedServiceOptionId] = useState<string>('full');
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
+  const [selectedServiceOptionId, setSelectedServiceOptionId] = useState<string | null>(null);
   
   // Intake Forms state
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [name, setName] = useState(reschedulingAppointment ? (reschedulingAppointment.customerName || (reschedulingAppointment as any).clientName || '') : '');
+  const [email, setEmail] = useState(reschedulingAppointment ? (reschedulingAppointment.customerEmail || '') : '');
+  const [phone, setPhone] = useState(reschedulingAppointment ? (reschedulingAppointment.customerPhone || (reschedulingAppointment as any).clientPhone || '') : '');
   const [notes, setNotes] = useState('');
 
-  // Deposit Payment Card states
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvc, setCardCvc] = useState('');
+  const [availability, setAvailability] = useState<AvailabilitySettings | null>(null);
 
-  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/\D/g, '').slice(0, 16);
-    const matches = val.match(/.{1,4}/g);
-    setCardNumber(matches ? matches.join(' ') : val);
-  };
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'availability'), (docSnap) => {
+      if (docSnap.exists()) {
+        setAvailability(docSnap.data() as AvailabilitySettings);
+      }
+    });
+    return () => unsub();
+  }, []);
 
-  const handleCardExpiryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/\D/g, '').slice(0, 4);
-    if (val.length >= 3) {
-      setCardExpiry(`${val.slice(0, 2)}/${val.slice(2, 4)}`);
-    } else {
-      setCardExpiry(val);
+  useEffect(() => {
+    if (formError) setFormError(null);
+  }, [selectedProduct, selectedServiceOptionId, selectedDate, selectedTimeSlot, name, email, phone]);
+
+  useEffect(() => {
+    if (reschedulingAppointment && reschedulingAppointment.style) {
+      onSelectProduct(reschedulingAppointment.style);
     }
-  };
-
-  const handleCardCvcChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/\D/g, '').slice(0, 3);
-    setCardCvc(val);
-  };
+  }, [reschedulingAppointment]);
 
   // Voucher Success State
   const [confirmedBooking, setConfirmedBooking] = useState<Appointment | null>(null);
@@ -86,42 +96,57 @@ export default function BookingForm({
   const [bookedAppointments, setBookedAppointments] = useState<Appointment[]>([]);
 
   useEffect(() => {
-    const saved = localStorage.getItem('nashglam_appointments');
-    if (saved) {
-      try {
-        setBookedAppointments(JSON.parse(saved));
-      } catch (e) {
-        console.error(e);
-      }
-    }
+    const unsub = onSnapshot(collection(db, 'appointments'), (snapshot) => {
+      const apps = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Appointment));
+      setBookedAppointments(apps);
+    });
+    return () => unsub();
   }, []);
 
   const getDynamicTimeSlots = (date: Date) => {
-    const day = date.getDay(); // 0=Sun, 5=Fri, 6=Sat
+    const day = date.getDay(); // 0=Sun, 6=Sat
     
-    if (day === 6) {
-      return []; // Saturday is CLOSED
+    let slots: { time: string }[] = [];
+
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const dateString = `${yyyy}-${mm}-${dd}`;
+    
+    if (availability && availability.blockedDates && availability.blockedDates.includes(dateString)) {
+      return [];
     }
     
-    // Sunday has different operating slots (10:00 AM - 06:00 PM)
-    const slots = day === 0
-      ? [
-          { time: '10:00 AM' },
-          { time: '11:30 AM' },
-          { time: '01:00 PM' },
-          { time: '02:30 PM' },
-          { time: '04:00 PM' },
-          { time: '05:30 PM' },
-        ]
-      : [
-          { time: '09:30 AM' },
-          { time: '11:00 AM' },
-          { time: '01:30 PM' },
-          { time: '03:00 PM' },
-          { time: '04:30 PM' },
-          { time: '06:00 PM' },
-          { time: '07:30 PM' },
-        ];
+    if (availability && availability.weeklyHours) {
+      const daySettings = availability.weeklyHours[day];
+      if (!daySettings || !daySettings.open || !daySettings.start || !daySettings.end) return [];
+      
+      const [startH, startM] = daySettings.start.split(':').map(Number);
+      const [endH, endM] = daySettings.end.split(':').map(Number);
+      
+      let currentMins = startH * 60 + startM;
+      const endMins = endH * 60 + endM;
+      
+      while (currentMins + 30 <= endMins) {
+        const h = Math.floor(currentMins / 60);
+        const m = currentMins % 60;
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const h12 = h % 12 || 12;
+        slots.push({ time: `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}` });
+        currentMins += 30;
+      }
+    } else {
+      if (day === 6) return [];
+      slots = day === 0
+        ? [
+            { time: '10:00 AM' }, { time: '11:30 AM' }, { time: '01:00 PM' },
+            { time: '02:30 PM' }, { time: '04:00 PM' }, { time: '05:30 PM' },
+          ]
+        : [
+            { time: '09:30 AM' }, { time: '11:00 AM' }, { time: '01:30 PM' },
+            { time: '03:00 PM' }, { time: '04:30 PM' }, { time: '06:00 PM' }, { time: '07:30 PM' },
+          ];
+    }
         
     const now = new Date();
     // 48-hour advance booking cutoff
@@ -143,19 +168,34 @@ export default function BookingForm({
         isAvailable = false;
       }
       
-      // 2. Friday nights: 4:30 PM, 6:00 PM, 7:30 PM are unavailable
-      if (day === 5) {
+      if (!availability && day === 5) {
         if (slot.time === '04:30 PM' || slot.time === '06:00 PM' || slot.time === '07:30 PM') {
           isAvailable = false;
         }
       }
       
-      // 3. Already booked?
+      const slotStartTime = slotDateTime.getTime();
+      const slotEndTime = slotStartTime + 3 * 60 * 60 * 1000; // 3 hours
+
       const targetDateStr = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-      const isBooked = bookedAppointments.some(
-        (app) => app.date === targetDateStr && app.timeSlot === slot.time
-      );
-      if (isBooked) {
+      const isOverlapping = bookedAppointments.some((app) => {
+        if (app.date !== targetDateStr) return false;
+        if (app.status === 'cancelled' || app.status === 'no-show') return false;
+        
+        const [appTimeStr, appMod] = app.timeSlot.split(' ');
+        let [appHStr, appMStr] = appTimeStr.split(':');
+        let appH = parseInt(appHStr, 10);
+        let appM = parseInt(appMStr, 10);
+        if (appMod === 'PM' && appH < 12) appH += 12;
+        if (appMod === 'AM' && appH === 12) appH = 0;
+        
+        const appStartTime = new Date(cellDate.getFullYear(), cellDate.getMonth(), cellDate.getDate(), appH, appM).getTime();
+        const appEndTime = appStartTime + 3 * 60 * 60 * 1000;
+        
+        return slotStartTime < appEndTime && slotEndTime > appStartTime;
+      });
+
+      if (isOverlapping) {
         isAvailable = false;
       }
       
@@ -166,7 +206,7 @@ export default function BookingForm({
     });
   };
 
-  const activeTimeSlots = getDynamicTimeSlots(selectedDate);
+  const activeTimeSlots = selectedDate ? getDynamicTimeSlots(selectedDate) : [];
 
   const handleManualDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -195,7 +235,8 @@ export default function BookingForm({
     }
   };
 
-  const formatDateForInput = (date: Date) => {
+  const formatDateForInput = (date: Date | null) => {
+    if (!date) return '';
     const yyyy = date.getFullYear();
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');
@@ -204,20 +245,34 @@ export default function BookingForm({
 
   const handleProceedToDeposit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
+    if (!selectedDate || !selectedTimeSlot) {
+      setFormError(lang === 'fr' ? 'Veuillez sélectionner une date et une heure.' : 'Please select a date and time.');
+      return;
+    }
     if (!selectedProduct) {
-      alert(b.alertSelectProduct);
+      setFormError(b.alertSelectProduct);
+      return;
+    }
+    if (selectedProduct.serviceOptions && !selectedServiceOptionId) {
+      setFormError(lang === 'fr' ? 'Veuillez sélectionner un type de service.' : 'Please select a service type.');
       return;
     }
     if (!name.trim()) {
-      alert(b.alertName);
+      setFormError(b.alertName);
       return;
     }
     if (!email.trim() || !email.includes('@')) {
-      alert(b.alertEmail);
+      setFormError(b.alertEmail);
       return;
     }
     if (!phone.trim() || phone.replace(/\D/g, '').length < 7) {
-      alert(b.alertPhone);
+      setFormError(b.alertPhone);
+      return;
+    }
+
+    if (reschedulingAppointment) {
+      handleUpdateReschedule();
       return;
     }
 
@@ -229,59 +284,148 @@ export default function BookingForm({
     setBookingStep('deposit');
   };
 
-  const handleBookSubmit = (e: React.FormEvent) => {
+  const handleUpdateReschedule = async () => {
+    if (!selectedProduct || !selectedDate || !selectedTimeSlot || !reschedulingAppointment) return;
+    const formattedDate = selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    const activeServiceOption = selectedProduct.serviceOptions?.find(o => o.id === selectedServiceOptionId);
+    
+    try {
+      await updateDoc(doc(db, 'appointments', reschedulingAppointment.id), {
+        date: formattedDate,
+        timeSlot: selectedTimeSlot,
+        style: selectedProduct,
+        selectedServiceOption: activeServiceOption || null,
+        customerName: name,
+        customerEmail: email,
+        customerPhone: phone,
+      });
+
+      const updatedApp: Appointment = {
+        ...reschedulingAppointment,
+        date: formattedDate,
+        timeSlot: selectedTimeSlot,
+        style: selectedProduct,
+        selectedServiceOption: activeServiceOption,
+        customerName: name,
+        customerEmail: email,
+        customerPhone: phone,
+      };
+      setConfirmedBooking(updatedApp);
+      onBookingConfirmed(updatedApp);
+    } catch (err) {
+      console.error('Error rescheduling', err);
+      setFormError('Failed to reschedule. Please try again.');
+    }
+  };
+
+  const handleConfirmPayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     if (!selectedProduct) return;
     if (!name.trim() || !email.trim() || !phone.trim()) {
-      alert(b.alertContactDetails);
+      setFormError(b.alertContactDetails);
       return;
     }
-    if (!cardNumber || cardNumber.replace(/\s/g, '').length < 16) {
-      alert(b.alertCardNumber);
-      return;
-    }
-    if (!cardExpiry || cardExpiry.length < 5) {
-      alert(b.alertExpiry);
-      return;
-    }
-    if (!cardCvc || cardCvc.length < 3) {
-      alert(b.alertCvc);
-      return;
-    }
-
-    // Always store dates in en-US for consistent comparison
-    const formattedDate = selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-
-    const activeServiceOption = selectedProduct.serviceOptions?.find(o => o.id === selectedServiceOptionId);
-    const finalPrice = activeServiceOption ? activeServiceOption.price : selectedProduct.price;
-
-    const newAppointment: Appointment = {
-      id: `LASH-${Math.floor(100000 + Math.random() * 90000)}`,
-      style: selectedProduct,
-      selectedServiceOption: activeServiceOption,
-      artist: activeArtist,
-      date: formattedDate,
-      timeSlot: selectedTimeSlot,
-      customerName: name,
-      customerEmail: email,
-      customerPhone: phone,
-      totalPrice: finalPrice,
-    };
-
-    const updated = [...bookedAppointments, newAppointment];
-    setBookedAppointments(updated);
-    localStorage.setItem('nashglam_appointments', JSON.stringify(updated));
-
-    setConfirmedBooking(newAppointment);
-    onBookingConfirmed(newAppointment);
     
-    setName('');
-    setEmail('');
-    setPhone('');
-    setNotes('');
-    setCardNumber('');
-    setCardExpiry('');
-    setCardCvc('');
+    if (reschedulingAppointment) {
+      handleUpdateReschedule();
+      return;
+    }
+    
+    if (!stripe || !elements) {
+      setFormError('Stripe has not loaded. Please wait a moment and try again.');
+      return;
+    }
+
+    const cardElement = elements.getElement(CardElement);
+    if (!cardElement) {
+      setFormError('Payment form not found.');
+      return;
+    }
+    
+    if (!selectedDate || !selectedTimeSlot) return;
+
+    setIsProcessingPayment(true);
+    setFormError(null);
+
+    try {
+      // 1. Get deposit amount from availability settings or fallback to 25
+      const depositAmount = availability?.depositAmount ?? 25;
+
+      // 2. Ask backend to create a PaymentIntent
+      const res = await fetch('/api/create-payment-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: depositAmount }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Network error. Failed to initialize payment.');
+      }
+
+      const data = await res.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      const { clientSecret } = data;
+
+      // 3. Confirm card payment directly with Stripe
+      const paymentResult = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: {
+          card: cardElement,
+          billing_details: {
+            name: name,
+            email: email,
+            phone: phone,
+          }
+        }
+      });
+
+      if (paymentResult.error) {
+        throw new Error(paymentResult.error.message || 'Payment failed.');
+      }
+
+      // If successful, create the appointment
+      const formattedDate = selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      const activeServiceOption = selectedProduct.serviceOptions?.find(o => o.id === selectedServiceOptionId);
+      const finalPrice = activeServiceOption ? activeServiceOption.price : selectedProduct.price;
+
+      const newAppointment: Appointment = {
+        id: `LASH-${Math.floor(100000 + Math.random() * 90000)}`,
+        style: selectedProduct,
+        selectedServiceOption: activeServiceOption,
+        artist: activeArtist,
+        date: formattedDate,
+        timeSlot: selectedTimeSlot,
+        customerName: name,
+        customerEmail: email,
+        customerPhone: phone,
+        totalPrice: finalPrice,
+      };
+
+      // Save to Firebase
+      await setDoc(doc(db, 'appointments', newAppointment.id), newAppointment);
+
+      const updated = [...bookedAppointments, newAppointment];
+      setBookedAppointments(updated);
+
+      setConfirmedBooking(newAppointment);
+      onBookingConfirmed(newAppointment);
+      
+      setName('');
+      setEmail('');
+      setPhone('');
+      setNotes('');
+      cardElement.clear();
+
+    } catch (err: any) {
+      console.error(err);
+      setFormError(err.message || 'Payment failed. Please try again.');
+    } finally {
+      setIsProcessingPayment(false);
+    }
   };
 
   const handleResetAppointment = () => {
@@ -383,7 +527,7 @@ export default function BookingForm({
                 {b.badge}
               </span>
               <h2 className={`font-serif text-2xl sm:text-3xl font-medium ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>
-                {bookingStep === 'form' ? b.titleForm : b.titleDeposit}
+                {reschedulingAppointment ? "Reschedule Appointment" : (bookingStep === 'form' ? b.titleForm : b.titleDeposit)}
               </h2>
               <p className={`font-sans text-xs sm:text-sm ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
                 {bookingStep === 'form' ? b.descForm : b.descDeposit}
@@ -404,60 +548,31 @@ export default function BookingForm({
               )}
             </div>
 
-            <form onSubmit={bookingStep === 'form' ? handleProceedToDeposit : handleBookSubmit} className="space-y-6">
+            <form onSubmit={bookingStep === 'form' ? handleProceedToDeposit : handleConfirmPayment} className="space-y-6">
               
               {bookingStep === 'form' ? (
                 <>
                   {/* 1. SELECT SERVICE TREATMENT */}
                   <div className="space-y-2">
                     <label className={`text-xs font-semibold tracking-widest block ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>
-                      {b.step1}
+                      {b.step1} <span className="text-pink-500">*</span>
                     </label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {LASH_PRODUCTS.map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => {
-                            onSelectProduct(p);
-                            setSelectedServiceOptionId('full');
-                          }}
-                          className={`flex items-center justify-between p-3.5 border rounded-xl transition-all text-left cursor-pointer ${
-                            selectedProduct?.id === p.id
-                              ? isDarkMode 
-                                ? 'border-pink-500 bg-pink-950/30 text-stone-100 shadow-2xs' 
-                                : 'border-pink-500 bg-pink-50/40 text-stone-900 shadow-2xs'
-                              : isDarkMode 
-                                ? 'border-stone-800 bg-stone-950 text-stone-400 hover:border-stone-700' 
-                                : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
-                          }`}
-                        >
-                          <div>
-                            <span className={`text-xs font-bold font-serif block ${selectedProduct?.id === p.id ? 'text-pink-500' : isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>{p.name}</span>
-                            <span className="text-[10px] font-mono mt-0.5 text-stone-400 block uppercase">
-                              {p.type} • {p.durationMin} {b.mins}
-                            </span>
-                          </div>
-                          <span className={`text-sm font-bold ${selectedProduct?.id === p.id ? 'text-pink-500' : isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>${p.price}.00</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Service Option Selection (Full Set vs Refill) */}
-                  {selectedProduct?.serviceOptions && (
-                    <div className="space-y-2 mt-4">
-                      <label className={`text-[10px] uppercase font-bold tracking-widest block ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
-                        {lang === 'fr' ? 'SÉLECTIONNEZ LE TYPE DE SERVICE' : 'SELECT SERVICE TYPE'}
-                      </label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {selectedProduct.serviceOptions.map((opt) => (
+                        <div key={p.id} className="flex flex-col space-y-2">
                           <button
-                            key={opt.id}
                             type="button"
-                            onClick={() => setSelectedServiceOptionId(opt.id)}
-                            className={`flex items-center justify-between p-3 border rounded-xl transition-all text-left cursor-pointer ${
-                              selectedServiceOptionId === opt.id
+                            onClick={() => {
+                              if (selectedProduct?.id === p.id) {
+                                onSelectProduct(null);
+                                setSelectedServiceOptionId(null);
+                              } else {
+                                onSelectProduct(p);
+                                setSelectedServiceOptionId(null);
+                              }
+                            }}
+                            className={`flex items-center justify-between p-3.5 border rounded-xl transition-all text-left cursor-pointer ${
+                              selectedProduct?.id === p.id
                                 ? isDarkMode 
                                   ? 'border-pink-500 bg-pink-950/30 text-stone-100 shadow-2xs' 
                                   : 'border-pink-500 bg-pink-50/40 text-stone-900 shadow-2xs'
@@ -466,17 +581,51 @@ export default function BookingForm({
                                   : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
                             }`}
                           >
-                            <span className={`text-[11px] font-semibold ${selectedServiceOptionId === opt.id ? 'text-pink-500' : isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>
-                              {opt.label}
-                            </span>
-                            <span className={`text-[12px] font-bold ${selectedServiceOptionId === opt.id ? 'text-pink-500' : isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>
-                              ${opt.price}.00
-                            </span>
+                            <div>
+                              <span className={`text-xs font-bold font-serif block ${selectedProduct?.id === p.id ? 'text-pink-500' : isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>{p.name}</span>
+                              <span className="text-[10px] font-mono mt-0.5 text-stone-400 block uppercase">
+                                {p.type} • {p.durationMin} {b.mins}
+                              </span>
+                            </div>
+                            <span className={`text-sm font-bold ${selectedProduct?.id === p.id ? 'text-pink-500' : isDarkMode ? 'text-stone-200' : 'text-stone-800'}`}>${p.price}.00</span>
                           </button>
-                        ))}
-                      </div>
+                          
+                          {selectedProduct?.id === p.id && p.serviceOptions && (
+                            <div className="pl-4 pr-1 py-1 space-y-2 border-l-2 border-pink-500/30 ml-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                              <label className={`text-[9px] uppercase font-bold tracking-widest block ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
+                                {lang === 'fr' ? 'SÉLECTIONNEZ LE TYPE DE SERVICE' : 'SELECT SERVICE TYPE'} <span className="text-pink-500">*</span>
+                              </label>
+                              <div className="flex flex-col space-y-1.5">
+                                {p.serviceOptions.map((opt) => (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (selectedServiceOptionId === opt.id) {
+                                        setSelectedServiceOptionId(null);
+                                      } else {
+                                        setSelectedServiceOptionId(opt.id);
+                                      }
+                                    }}
+                                    className={`flex items-center justify-between p-2.5 border rounded-lg transition-all text-left cursor-pointer ${
+                                      selectedServiceOptionId === opt.id
+                                        ? isDarkMode ? 'border-pink-500 bg-pink-950/30 text-pink-400' : 'border-pink-500 bg-pink-50 text-pink-600'
+                                        : isDarkMode ? 'border-stone-800 bg-stone-900/50 text-stone-400' : 'border-stone-200 bg-stone-50 text-stone-600'
+                                    }`}
+                                  >
+                                    <span className="text-[10px] font-semibold tracking-wide">{opt.label}</span>
+                                    <span className="text-[10px] font-bold">${opt.price}.00</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  )}
+                  </div>
+
 
                   {/* 2. SELECT DATE CALENDAR & TIME SLOTS */}
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-1.5">
@@ -486,7 +635,7 @@ export default function BookingForm({
                       <div className="flex items-center justify-between">
                         <label className={`text-xs font-semibold tracking-widest flex items-center space-x-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>
                           <Calendar className="w-4 h-4 text-pink-500" />
-                          <span>{b.step2}</span>
+                          <span>{b.step2} <span className="text-pink-500">*</span></span>
                         </label>
                         <input 
                           type="date"
@@ -567,8 +716,22 @@ export default function BookingForm({
                                 return <div key={`empty-${idx}`} />;
                               }
                               
+                              let isClosedDay = false;
+                              if (availability) {
+                                if (availability.weeklyHours) {
+                                  isClosedDay = !availability.weeklyHours[cellDate.getDay()]?.open;
+                                }
+                                const cellY = cellDate.getFullYear();
+                                const cellM = String(cellDate.getMonth() + 1).padStart(2, '0');
+                                const cellD = String(cellDate.getDate()).padStart(2, '0');
+                                const cellDateString = `${cellY}-${cellM}-${cellD}`;
+                                
+                                if (availability.blockedDates?.includes(cellDateString)) {
+                                  isClosedDay = true;
+                                }
+                              }
+                              
                               const cellDayNum = cellDate.getDate();
-                              const isSat = cellDate.getDay() === 6;
                               const today = new Date();
                               const todayTrunc = new Date(today.getFullYear(), today.getMonth(), today.getDate());
                               const cellTrunc = new Date(cellDate.getFullYear(), cellDate.getMonth(), cellDate.getDate());
@@ -585,7 +748,7 @@ export default function BookingForm({
                                 today.getMonth() === cellDate.getMonth() &&
                                 today.getFullYear() === cellDate.getFullYear();
                                 
-                              const isDisabled = isPast || isSat;
+                              const isDisabled = isPast || isClosedDay;
                               
                               let buttonStyle = "aspect-square rounded-lg flex flex-col items-center justify-center text-xs transition-all relative font-sans ";
                               
@@ -609,11 +772,18 @@ export default function BookingForm({
                                   type="button"
                                   disabled={isDisabled}
                                   onClick={() => {
-                                    setSelectedDate(cellDate);
-                                    const nextSlots = getDynamicTimeSlots(cellDate);
-                                    const firstAvailable = nextSlots.find(s => s.available);
-                                    if (firstAvailable) {
-                                      setSelectedTimeSlot(firstAvailable.time);
+                                    if (isSelected) {
+                                      setSelectedDate(null);
+                                      setSelectedTimeSlot(null);
+                                    } else {
+                                      setSelectedDate(cellDate);
+                                      const nextSlots = getDynamicTimeSlots(cellDate);
+                                      const firstAvailable = nextSlots.find(s => s.available);
+                                      if (firstAvailable) {
+                                        setSelectedTimeSlot(firstAvailable.time);
+                                      } else {
+                                        setSelectedTimeSlot(null);
+                                      }
                                     }
                                   }}
                                   className={buttonStyle}
@@ -641,7 +811,7 @@ export default function BookingForm({
                     <div className="space-y-2 lg:col-span-5">
                       <label className={`text-xs font-semibold tracking-widest flex items-center space-x-1 ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>
                         <Clock className="w-4 h-4 text-pink-500" />
-                        <span>{b.step3}</span>
+                        <span>{b.step3} <span className="text-pink-500">*</span></span>
                       </label>
 
                       <div className="grid grid-cols-2 gap-2">
@@ -650,7 +820,13 @@ export default function BookingForm({
                             key={slot.time}
                             type="button"
                             disabled={!slot.available}
-                            onClick={() => setSelectedTimeSlot(slot.time)}
+                            onClick={() => {
+                              if (selectedTimeSlot === slot.time) {
+                                setSelectedTimeSlot(null);
+                              } else {
+                                setSelectedTimeSlot(slot.time);
+                              }
+                            }}
                             className={`py-3 px-1 border text-center rounded-xl text-[11px] font-mono font-medium transition-all ${
                               !slot.available
                                 ? isDarkMode
@@ -676,7 +852,7 @@ export default function BookingForm({
                   {/* 3. CLIENT CONTACT FORMS */}
                   <div className="space-y-3 pt-2">
                     <label className={`text-xs font-semibold tracking-widest block ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>
-                      {b.step4}
+                      {b.step4} <span className="text-pink-500">*</span>
                     </label>
                     
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
@@ -753,6 +929,18 @@ export default function BookingForm({
                     </div>
                   </div>
 
+                  {formError && (
+                    <div className="pt-2 text-center">
+                      <span className={`inline-block text-xs font-semibold px-4 py-2 rounded-lg border ${
+                        isDarkMode
+                          ? 'bg-red-950/40 text-red-400 border-red-900/50'
+                          : 'bg-red-50 text-red-600 border-red-200'
+                      }`}>
+                        {formError}
+                      </span>
+                    </div>
+                  )}
+
                   {/* CONFIRM BUTTON */}
                   <div className={`border-t pt-4.5 flex items-center justify-end flex-wrap gap-4 -mx-8 px-8 -mb-10 p-6 rounded-b-2xl ${
                     isDarkMode 
@@ -763,7 +951,7 @@ export default function BookingForm({
                       type="submit"
                       className="px-8 py-3.5 bg-pink-600 hover:bg-pink-700 border border-transparent rounded-xl text-xs font-sans font-bold tracking-widest text-white hover:shadow-md transition-all active:scale-95 cursor-pointer flex items-center space-x-2"
                     >
-                      <span>{b.confirm}</span>
+                      <span>{reschedulingAppointment ? "CONFIRM RESCHEDULE" : b.confirm}</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -827,52 +1015,43 @@ export default function BookingForm({
                     }`}>
                       <span className="text-[10px] font-mono text-stone-400 block tracking-widest uppercase text-center">{b.secureCheckout}</span>
                       
-                      <div className="relative">
-                        <input
-                          type="text"
-                          required
-                          maxLength={19}
-                          placeholder={b.cardPlaceholder}
-                          value={cardNumber}
-                          onChange={handleCardNumberChange}
-                          className={`w-full border rounded-xl py-2.5 px-3.5 text-xs outline-none focus:ring-1 focus:ring-pink-500 font-mono transition-all ${
-                            isDarkMode
-                              ? 'bg-stone-950 border-stone-800 text-stone-100 placeholder-stone-500 focus:border-pink-500'
-                              : 'bg-white border-stone-200 text-stone-800 placeholder-stone-400 focus:border-pink-500'
-                          }`}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <input
-                          type="text"
-                          required
-                          maxLength={5}
-                          placeholder="MM/YY *"
-                          value={cardExpiry}
-                          onChange={handleCardExpiryChange}
-                          className={`w-full border rounded-xl py-2.5 px-3.5 text-xs outline-none focus:ring-1 focus:ring-pink-500 text-center font-mono transition-all ${
-                            isDarkMode
-                              ? 'bg-stone-950 border-stone-800 text-stone-100 placeholder-stone-500 focus:border-pink-500'
-                              : 'bg-white border-stone-200 text-stone-800 placeholder-stone-400 focus:border-pink-500'
-                          }`}
-                        />
-                        <input
-                          type="password"
-                          required
-                          maxLength={3}
-                          placeholder="CVC *"
-                          value={cardCvc}
-                          onChange={handleCardCvcChange}
-                          className={`w-full border rounded-xl py-2.5 px-3.5 text-xs outline-none focus:ring-1 focus:ring-pink-500 text-center font-mono transition-all ${
-                            isDarkMode
-                              ? 'bg-stone-950 border-stone-800 text-stone-100 placeholder-stone-500 focus:border-pink-500'
-                              : 'bg-white border-stone-200 text-stone-800 placeholder-stone-400 focus:border-pink-500'
-                          }`}
-                        />
+                      <div className={`p-4 border rounded-xl transition-all ${
+                        isDarkMode
+                          ? 'bg-stone-950 border-stone-800 focus-within:border-pink-500'
+                          : 'bg-white border-stone-200 focus-within:border-pink-500'
+                      }`}>
+                        <CardElement options={{
+                          style: {
+                            base: {
+                              color: isDarkMode ? '#f5f5f4' : '#292524',
+                              fontFamily: 'monospace',
+                              fontSmoothing: 'antialiased',
+                              fontSize: '14px',
+                              '::placeholder': {
+                                color: isDarkMode ? '#78716c' : '#a8a29e',
+                              },
+                            },
+                            invalid: {
+                              color: '#ef4444',
+                              iconColor: '#ef4444',
+                            },
+                          },
+                        }} />
                       </div>
                     </div>
                   </div>
+
+                  {formError && (
+                    <div className="pt-2 text-center">
+                      <span className={`inline-block text-xs font-semibold px-4 py-2 rounded-lg border ${
+                        isDarkMode
+                          ? 'bg-red-950/40 text-red-400 border-red-900/50'
+                          : 'bg-red-50 text-red-600 border-red-200'
+                      }`}>
+                        {formError}
+                      </span>
+                    </div>
+                  )}
 
                   {/* FINAL CHECKOUT BUTTON */}
                   <div className={`border-t pt-4.5 flex items-center justify-between flex-wrap gap-4 -mx-8 px-8 -mb-10 p-6 rounded-b-2xl ${
@@ -890,10 +1069,11 @@ export default function BookingForm({
 
                     <button
                       type="submit"
-                      className="px-8 py-3.5 bg-pink-600 hover:bg-pink-700 border border-transparent rounded-xl text-xs font-sans font-bold tracking-widest text-white hover:shadow-md transition-all active:scale-95 cursor-pointer flex items-center space-x-2"
+                      disabled={!stripe || isProcessingPayment}
+                      className="px-8 py-3.5 bg-pink-600 hover:bg-pink-700 border border-transparent rounded-xl text-xs font-sans font-bold tracking-widest text-white hover:shadow-md transition-all active:scale-95 cursor-pointer flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <span>{b.getBooked}</span>
-                      <ArrowRight className="w-4 h-4" />
+                      <span>{isProcessingPayment ? "PROCESSING..." : b.getBooked}</span>
+                      {!isProcessingPayment && <ArrowRight className="w-4 h-4" />}
                     </button>
                   </div>
                 </>

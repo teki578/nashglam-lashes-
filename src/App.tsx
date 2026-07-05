@@ -11,9 +11,19 @@ import BookingForm from './components/BookingForm';
 import ClientReviews from './components/ClientReviews';
 import BeautyFaqs from './components/BeautyFaqs';
 import CartDrawer from './components/CartDrawer';
+import ManageAppointment from './components/ManageAppointment';
+import AdminLogin from './components/AdminLogin';
+import AdminDashboard from './components/AdminDashboard';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { auth, db } from './firebase';
 import { LASH_PRODUCTS } from './data';
 import { CartItem, Appointment, LashProduct } from './types';
 import { useLanguage } from './i18n/LanguageContext';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements } from '@stripe/react-stripe-js';
+import { collection, onSnapshot } from 'firebase/firestore';
+
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || '');
 
 import heroImg from './assets/images/lash_hero_banner_1781406354819.jpg';
 import cleanKitImg from './assets/images/lash_clean_kit_new.png';
@@ -56,21 +66,58 @@ export default function App() {
   const foot = t.footer;
 
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>(() => {
-    const saved = localStorage.getItem('nashglam_appointments');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return [];
-  });
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+
+  React.useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'appointments'), (snapshot) => {
+      const apps = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Appointment));
+      setAppointments(apps);
+    });
+    return () => unsub();
+  }, []);
   const [lastConfirmedAppointment, setLastConfirmedAppointment] = useState<Appointment | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [currentHeroImageIndex, setCurrentHeroImageIndex] = React.useState(0);
+  
+  const [isManagingAppointment, setIsManagingAppointment] = useState(false);
+  const [reschedulingAppointment, setReschedulingAppointment] = useState<Appointment | null>(null);
+
+  const [adminUser, setAdminUser] = useState<FirebaseUser | null>(null);
+  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+  const [adminClicks, setAdminClicks] = useState(0);
+
+  React.useEffect(() => {
+    if (adminClicks > 0) {
+      const timer = setTimeout(() => setAdminClicks(0), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [adminClicks]);
+
+  const handleCopyrightClick = () => {
+    setAdminClicks((prev) => {
+      const next = prev + 1;
+      if (next >= 3) {
+        if (adminUser) setShowAdminDashboard((s) => !s);
+        else setIsAdminLoginOpen(true);
+        return 0;
+      }
+      return next;
+    });
+  };
+
+  React.useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setAdminUser(user);
+      if (user) {
+        setShowAdminDashboard(true);
+      } else {
+        setShowAdminDashboard(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -166,13 +213,8 @@ export default function App() {
     setCartItems((prevItems) => prevItems.filter((item) => item.id !== itemId));
   };
 
-  // BOOK AN APPOINTMENT (Synchronized to local app state and pre-selected style)
+  // BOOK AN APPOINTMENT
   const handleBookingConfirmed = (appointment: Appointment) => {
-    setAppointments((prev) => {
-      const updated = [...prev, appointment];
-      localStorage.setItem('nashglam_appointments', JSON.stringify(updated));
-      return updated;
-    });
     setLastConfirmedAppointment(appointment);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -197,18 +239,21 @@ export default function App() {
       
       {/* 1. BRAND HEADER */}
       <Header
-        cartItemCount={cartItems.reduce((acc, item) => acc + item.quantity, 0)}
+        cartItemCount={cartItems.reduce((sum, i) => sum + i.quantity, 0)}
         onOpenCart={() => setIsCartOpen(true)}
-        onScrollTo={handleScrollTo}
+        onScrollTo={(id) => {
+          setShowAdminDashboard(false);
+          const el = document.getElementById(id);
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }}
         bookedAppointmentsCount={appointments.length}
         isDarkMode={isDarkMode}
-        onToggleDarkMode={() => setIsDarkMode((prev) => !prev)}
+        onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
         confirmedAppointment={lastConfirmedAppointment}
         onClearConfirmed={() => setLastConfirmedAppointment(null)}
       />
 
-      <main className="pb-16">
-        
+      <main className={`flex-1 ${isDarkMode ? 'bg-stone-900 text-stone-100' : 'bg-stone-50 text-stone-900'}`}>  
         {/* 2. MAJESTIC HERO SHOWCASE VIEW */}
         <section id="hero" className="relative w-full min-h-[85vh] flex items-center justify-center overflow-hidden bg-stone-950">
           {/* Background Carousel */}
@@ -344,53 +389,23 @@ export default function App() {
 
                 </div>
 
-                {/* Qty and Purchase action bar */}
-                <div className="flex items-center gap-4 pt-4 border-t border-stone-100">
-                  
-                  {/* Qty controller */}
-                  <div className="flex items-center border border-stone-200 rounded-xl overflow-hidden bg-stone-50">
-                    <button
-                      type="button"
-                      onClick={() => setCleanKitQty(Math.max(1, cleanKitQty - 1))}
-                      className="p-3 text-stone-500 hover:bg-stone-100 hover:text-stone-800 cursor-pointer transition-colors"
-                    >
-                      <Minus className="w-3.5 h-3.5" />
-                    </button>
-                    <span className="w-9 text-center font-mono font-bold text-xs text-stone-800 select-none">
-                      {cleanKitQty}
+                {/* In-Studio Only Message */}
+                <div className={`flex items-center gap-4 pt-4 border-t ${
+                  isDarkMode ? 'border-stone-800' : 'border-stone-100'
+                }`}>
+                  <div className={`w-full py-4 px-6 rounded-xl border text-xs font-sans font-bold tracking-widest text-center uppercase flex flex-col items-center justify-center space-y-1.5 ${
+                    isDarkMode 
+                      ? 'bg-stone-900/50 border-stone-800 text-stone-300' 
+                      : 'bg-stone-50 border-stone-200 text-stone-500'
+                  }`}>
+                    <span className="flex items-center space-x-2">
+                      <Sparkles className="w-4 h-4 text-pink-500" />
+                      <span>Available for Purchase In-Studio</span>
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setCleanKitQty(cleanKitQty + 1)}
-                      className="p-3 text-stone-500 hover:bg-stone-100 hover:text-stone-800 cursor-pointer transition-colors"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
+                    <span className="text-[10px] font-mono font-normal normal-case opacity-70">
+                      Add to your appointment during your visit
+                    </span>
                   </div>
-
-                  {/* Add cart trigger */}
-                  <button
-                    type="button"
-                    onClick={handleAddCleanKitToCart}
-                    className={`flex-1 py-3.5 px-6 rounded-xl border border-transparent text-xs font-sans font-bold tracking-widest transition-all flex items-center justify-center space-x-2 cursor-pointer ${
-                      showCleanKitAdded
-                        ? 'bg-emerald-700 text-stone-50'
-                        : 'bg-pink-600 hover:bg-pink-700 text-white shadow-pink-900/10'
-                    }`}
-                  >
-                    {showCleanKitAdded ? (
-                      <>
-                        <Check className="w-4 h-4 text-emerald-300 animate-pulse" />
-                        <span>{cat.addedToBag}</span>
-                      </>
-                    ) : (
-                      <>
-                        <ShoppingBag className="w-4 h-4" />
-                        <span>{cat.addToBag}</span>
-                      </>
-                    )}
-                  </button>
-
                 </div>
 
               </div>
@@ -400,14 +415,56 @@ export default function App() {
         </section>
 
         {/* 5. SECURE LUXURY ONLINE BOOKING SCHEDULE */}
-        <section id="booking" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          <BookingForm
-            selectedProduct={selectedBookingProduct}
-            onBookingConfirmed={handleBookingConfirmed}
-            onSelectProduct={(p) => setSelectedBookingProduct(p)}
-            isDarkMode={isDarkMode}
-          />
+        <section id="booking" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 relative">
+          <div className="flex justify-end mb-4 absolute right-4 sm:right-8 top-12 z-10">
+            {!isManagingAppointment && (
+              <button 
+                onClick={() => setIsManagingAppointment(true)} 
+                className="text-xs font-bold tracking-widest text-pink-500 uppercase hover:text-pink-600 transition-colors border-b border-pink-500/30 pb-0.5 cursor-pointer"
+              >
+                Manage Existing Appointment
+              </button>
+            )}
+          </div>
+
+          {isManagingAppointment ? (
+            <ManageAppointment 
+              isDarkMode={isDarkMode} 
+              onBackToBooking={() => setIsManagingAppointment(false)}
+              onRescheduleStart={(app) => {
+                setReschedulingAppointment(app);
+                setIsManagingAppointment(false);
+              }}
+            />
+          ) : (
+            <Elements stripe={stripePromise}>
+              <BookingForm
+                selectedProduct={selectedBookingProduct}
+                reschedulingAppointment={reschedulingAppointment}
+                onBookingConfirmed={(app) => {
+                  if (reschedulingAppointment) {
+                    setReschedulingAppointment(null);
+                  } else {
+                    handleBookingConfirmed(app);
+                  }
+                }}
+                onCancelReschedule={() => setReschedulingAppointment(null)}
+                onSelectProduct={(p) => setSelectedBookingProduct(p)}
+                isDarkMode={isDarkMode}
+              />
+            </Elements>
+          )}
         </section>
+
+        {showAdminDashboard && (
+          <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+            <AdminDashboard 
+              isDarkMode={isDarkMode} 
+              appointments={appointments} 
+              onRemoveAppointment={handleRemoveAppointment} 
+            />
+          </section>
+        )}
 
         {/* 5.5 CLIENT REVIEWS & SUBMISSION FEEDBACK */}
         <section id="reviews" className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 border-t border-b scroll-mt-20 transition-colors ${
@@ -421,7 +478,7 @@ export default function App() {
           <BeautyFaqs isDarkMode={isDarkMode} />
         </section>
 
-      </main>
+        </main>
 
       {/* 7. HIGHLY REFINED LUXURY FOOTER - NO AI LABELS */}
       <footer className="bg-stone-900 border-t border-stone-800 text-stone-300 py-16 font-sans">
@@ -435,14 +492,14 @@ export default function App() {
             <p className="text-xs text-stone-400 font-light leading-relaxed">
               {foot.tagline}
             </p>
-            <div className="flex space-x-3 pt-2 text-stone-400">
-              <a href="https://www.instagram.com/nashglam.lashes/" target="_blank" rel="noopener noreferrer" className="hover:text-pink-500 transition-colors">
-                <Instagram className="w-4 h-4" />
-              </a>
-              <a href="#booking" className="hover:text-pink-500 transition-colors">
-                <Bookmark className="w-4 h-4" />
-              </a>
-            </div>
+              <div className="flex space-x-3 pt-2 text-stone-400">
+                <a href="https://www.instagram.com/nashglam.lashes/" target="_blank" rel="noopener noreferrer" className="hover:text-pink-500 transition-colors">
+                  <Instagram className="w-4 h-4" />
+                </a>
+                <a href="#booking" className="hover:text-pink-500 transition-colors">
+                  <Bookmark className="w-4 h-4" />
+                </a>
+              </div>
           </div>
 
           {/* Location Col */}
@@ -503,7 +560,12 @@ export default function App() {
 
         {/* Sub bottom credits */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 pt-8 border-t border-stone-800 text-center text-[10px] text-stone-500">
-          <p>{foot.copyright(new Date().getFullYear())}</p>
+          <p 
+            onClick={handleCopyrightClick} 
+            className="select-none"
+          >
+            {foot.copyright(new Date().getFullYear())}
+          </p>
         </div>
       </footer>
 
@@ -519,6 +581,15 @@ export default function App() {
             appointments={appointments}
             onRemoveAppointment={handleRemoveAppointment}
             isDarkMode={isDarkMode}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isAdminLoginOpen && (
+          <AdminLogin 
+            onClose={() => setIsAdminLoginOpen(false)} 
+            isDarkMode={isDarkMode} 
           />
         )}
       </AnimatePresence>

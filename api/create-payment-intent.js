@@ -1,4 +1,4 @@
-const Stripe = require('stripe');
+import Stripe from 'stripe';
 
 function sendJson(res, statusCode, data) {
   res.statusCode = statusCode;
@@ -6,7 +6,7 @@ function sendJson(res, statusCode, data) {
   res.end(JSON.stringify(data));
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // CORS setup
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*'); 
@@ -36,13 +36,13 @@ module.exports = async function handler(req, res) {
     const stripeSecret = process.env.STRIPE_SECRET_KEY;
     if (!stripeSecret) {
       console.error('Missing STRIPE_SECRET_KEY');
-      return sendJson(res, 500, { error: 'Server misconfiguration: missing Stripe key. Please add STRIPE_SECRET_KEY to your Vercel environment variables.' });
+      return sendJson(res, 500, { error: 'Server misconfiguration: missing Stripe key.' });
     }
 
     const stripe = new Stripe(stripeSecret);
 
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: amount * 100, // Stripe expects amounts in cents
+      amount: amount * 100,
       currency: 'cad',
       automatic_payment_methods: {
         enabled: true,
@@ -54,4 +54,4 @@ module.exports = async function handler(req, res) {
     console.error('Stripe error:', error);
     sendJson(res, 500, { error: error.message });
   }
-};
+}

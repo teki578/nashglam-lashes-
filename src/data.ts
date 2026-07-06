@@ -27,9 +27,9 @@ export const LASH_PRODUCTS: LashProduct[] = [
     serviceOptions: [
       { id: 'full', label: 'Full Set', price: 90 },
       { id: 'refill_1w', label: '1 Week Refill', price: 45 },
-      { id: 'refill_2w', label: '2 Weeks Refill', price: 60 },
-      { id: 'refill_3w', label: '3 Weeks Refill', price: 75 },
-      { id: 'refill_4w', label: '4 Weeks Refill', price: 85 },
+      { id: 'refill_2w', label: '2 Weeks Refill', price: 55 },
+      { id: 'refill_3w', label: '3 Weeks Refill', price: 70 },
+      { id: 'refill_4w', label: '4 Weeks Refill', price: 80 },
     ],
   },
   {
@@ -49,8 +49,8 @@ export const LASH_PRODUCTS: LashProduct[] = [
       { id: 'full', label: 'Full Set', price: 95 },
       { id: 'refill_1w', label: '1 Week Refill', price: 50 },
       { id: 'refill_2w', label: '2 Weeks Refill', price: 65 },
-      { id: 'refill_3w', label: '3 Weeks Refill', price: 80 },
-      { id: 'refill_4w', label: '4 Weeks Refill', price: 90 },
+      { id: 'refill_3w', label: '3 Weeks Refill', price: 75 },
+      { id: 'refill_4w', label: '4 Weeks Refill', price: 85 },
     ],
   },
   {
@@ -70,8 +70,8 @@ export const LASH_PRODUCTS: LashProduct[] = [
       { id: 'full', label: 'Full Set', price: 95 },
       { id: 'refill_1w', label: '1 Week Refill', price: 50 },
       { id: 'refill_2w', label: '2 Weeks Refill', price: 65 },
-      { id: 'refill_3w', label: '3 Weeks Refill', price: 80 },
-      { id: 'refill_4w', label: '4 Weeks Refill', price: 90 },
+      { id: 'refill_3w', label: '3 Weeks Refill', price: 75 },
+      { id: 'refill_4w', label: '4 Weeks Refill', price: 85 },
     ],
   },
   {

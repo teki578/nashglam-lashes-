@@ -355,7 +355,8 @@ export default function BookingForm({
       });
 
       if (!res.ok) {
-        throw new Error('Network error. Failed to initialize payment.');
+        const errText = await res.text().catch(() => '');
+        throw new Error(`Network error (${res.status} ${res.statusText}): ${errText}`);
       }
 
       const data = await res.json();

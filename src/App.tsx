@@ -23,7 +23,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import { collection, onSnapshot } from 'firebase/firestore';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || '');
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || 'pk_test_51TjYXnFFMH7EPKQBot9zi26TvXBIKyMgF5evieyd2F5jmbef6Gqxm04T7LXOLvLaklJ20R5MatNVPDHsUBDAPHwG00p5xcM5lG');
 
 import heroImg from './assets/images/lash_hero_banner_1781406354819.jpg';
 import cleanKitImg from './assets/images/lash_clean_kit_new.png';

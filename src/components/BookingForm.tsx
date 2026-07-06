@@ -137,15 +137,16 @@ export default function BookingForm({
       }
     } else {
       if (day === 6) return [];
-      slots = day === 0
-        ? [
-            { time: '10:00 AM' }, { time: '11:30 AM' }, { time: '01:00 PM' },
-            { time: '02:30 PM' }, { time: '04:00 PM' }, { time: '05:30 PM' },
-          ]
-        : [
-            { time: '09:30 AM' }, { time: '11:00 AM' }, { time: '01:30 PM' },
-            { time: '03:00 PM' }, { time: '04:30 PM' }, { time: '06:00 PM' }, { time: '07:30 PM' },
-          ];
+      let currentMins = day === 0 ? 10 * 60 : 9 * 60 + 30;
+      const endMins = day === 0 ? 17 * 60 + 30 : 19 * 60 + 30;
+      while (currentMins <= endMins) {
+        const h = Math.floor(currentMins / 60);
+        const m = currentMins % 60;
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const h12 = h % 12 || 12;
+        slots.push({ time: `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}` });
+        currentMins += 30;
+      }
     }
         
     const now = new Date();

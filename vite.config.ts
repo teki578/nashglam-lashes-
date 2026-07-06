@@ -14,25 +14,26 @@ export default defineConfig(() => {
           server.middlewares.use('/api/create-payment-intent', async (req, res, next) => {
             try {
               const modulePath = path.join(process.cwd(), 'api', 'create-payment-intent.js');
-              const fileUrl = 'file://' + modulePath.replace(/\\/g, '/') + '?t=' + Date.now();
-              const handler = await import(/* @vite-ignore */ fileUrl);
+              // Clear require cache for hot reloading
+              delete require.cache[require.resolve(modulePath)];
+              const handler = require(modulePath);
 
               if (req.method === 'POST') {
                 let body = '';
                 req.on('data', chunk => { body += chunk.toString(); });
                 req.on('end', async () => {
                   try {
-                    if (body) req.body = JSON.parse(body);
+                    if (body) (req as any).body = JSON.parse(body);
                   } catch (e) {
                     res.statusCode = 400;
                     return res.end(JSON.stringify({ error: 'Invalid JSON' }));
                   }
-                  await handler.default(req, res);
+                  await handler(req, res);
                 });
               } else {
-                await handler.default(req, res);
+                await handler(req, res);
               }
-            } catch (err) {
+            } catch (err: any) {
               console.error('API Error:', err);
               res.statusCode = 500;
               res.end(JSON.stringify({ error: err.message }));

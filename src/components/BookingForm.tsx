@@ -61,6 +61,7 @@ export default function BookingForm({
   
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string | null>(null);
   const [selectedServiceOptionId, setSelectedServiceOptionId] = useState<string | null>(null);
+  const [wantsWispySet, setWantsWispySet] = useState(reschedulingAppointment ? !!reschedulingAppointment.wantsWispySet : false);
   
   // Intake Forms state
   const [name, setName] = useState(reschedulingAppointment ? (reschedulingAppointment.customerName || (reschedulingAppointment as any).clientName || '') : '');
@@ -81,7 +82,7 @@ export default function BookingForm({
 
   useEffect(() => {
     if (formError) setFormError(null);
-  }, [selectedProduct, selectedServiceOptionId, selectedDate, selectedTimeSlot, name, email, phone]);
+  }, [selectedProduct, selectedServiceOptionId, wantsWispySet, selectedDate, selectedTimeSlot, name, email, phone]);
 
   useEffect(() => {
     if (reschedulingAppointment && reschedulingAppointment.style) {
@@ -290,6 +291,7 @@ export default function BookingForm({
         timeSlot: selectedTimeSlot,
         style: selectedProduct,
         selectedServiceOption: activeServiceOption || null,
+        wantsWispySet: wantsWispySet,
         customerName: name,
         customerEmail: email,
         customerPhone: phone,
@@ -301,6 +303,7 @@ export default function BookingForm({
         timeSlot: selectedTimeSlot,
         style: selectedProduct,
         selectedServiceOption: activeServiceOption,
+        wantsWispySet: wantsWispySet,
         customerName: name,
         customerEmail: email,
         customerPhone: phone,
@@ -370,7 +373,7 @@ export default function BookingForm({
       // 3. Confirm card payment directly with Stripe
       const paymentResult = await stripe.confirmCardPayment(clientSecret, {
         payment_method: {
-          card: cardElement,
+          card: cardElement as any,
           billing_details: {
             name: name,
             email: email,
@@ -386,12 +389,13 @@ export default function BookingForm({
       // If successful, create the appointment
       const formattedDate = selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       const activeServiceOption = selectedProduct.serviceOptions?.find(o => o.id === selectedServiceOptionId);
-      const finalPrice = activeServiceOption ? activeServiceOption.price : selectedProduct.price;
+      const finalPrice = (activeServiceOption ? activeServiceOption.price : selectedProduct.price) + (wantsWispySet ? 5 : 0);
 
       const newAppointment: Appointment = {
         id: `LASH-${Math.floor(100000 + Math.random() * 90000)}`,
         style: selectedProduct,
         selectedServiceOption: activeServiceOption,
+        wantsWispySet: wantsWispySet,
         artist: activeArtist,
         date: formattedDate,
         timeSlot: selectedTimeSlot,
@@ -427,9 +431,6 @@ export default function BookingForm({
   const handleResetAppointment = () => {
     setConfirmedBooking(null);
     setBookingStep('form');
-    setCardNumber('');
-    setCardExpiry('');
-    setCardCvc('');
   };
 
   const handleDownloadICS = () => {
@@ -477,7 +478,7 @@ export default function BookingForm({
       `DTSTART:${dtStart}`,
       `DTEND:${dtEnd}`,
       `DTSTAMP:${dtStamp}`,
-      `DESCRIPTION:Your upcoming lash styling appointment with Stylist ${confirmedBooking.artist.name} is confirmed!\\nStyle: ${confirmedBooking.style.name} ${confirmedBooking.selectedServiceOption ? '(' + confirmedBooking.selectedServiceOption.label + ')' : ''}\\nArtist: ${confirmedBooking.artist.name}\\nDate: ${confirmedBooking.date}\\nTime: ${confirmedBooking.timeSlot}\\nDeposit paid.\\nLooking forward to styling you!`,
+      `DESCRIPTION:Your upcoming lash styling appointment with Stylist ${confirmedBooking.artist.name} is confirmed!\\nStyle: ${confirmedBooking.style.name} ${confirmedBooking.selectedServiceOption ? '(' + confirmedBooking.selectedServiceOption.label + ')' : ''} ${confirmedBooking.wantsWispySet ? '(+ Wispy)' : ''}\\nArtist: ${confirmedBooking.artist.name}\\nDate: ${confirmedBooking.date}\\nTime: ${confirmedBooking.timeSlot}\\nDeposit paid.\\nLooking forward to styling you!`,
       'LOCATION:NashGlam Home Studio, Terrebonne, QC',
       'STATUS:CONFIRMED',
       'END:VEVENT',
@@ -496,6 +497,8 @@ export default function BookingForm({
   };
 
   const activeProduct = selectedProduct || LASH_PRODUCTS[0];
+  const activeServiceOpt = activeProduct.serviceOptions?.find(o => o.id === selectedServiceOptionId);
+  const computedPrice = (activeServiceOpt ? activeServiceOpt.price : activeProduct.price) + (wantsWispySet ? 5 : 0);
 
   // Display date in the current language
   const displayDate = (d: Date) =>
@@ -615,6 +618,26 @@ export default function BookingForm({
                                   </button>
                                 ))}
                               </div>
+                              <div className="mt-3">
+                                  <label className={`flex items-center space-x-2 cursor-pointer p-2.5 rounded-lg border transition-all ${
+                                    wantsWispySet 
+                                      ? isDarkMode ? 'border-pink-500 bg-pink-950/30' : 'border-pink-500 bg-pink-50'
+                                      : isDarkMode ? 'border-stone-800 bg-stone-900/50' : 'border-stone-200 bg-stone-50'
+                                  }`}>
+                                    <input 
+                                      type="checkbox" 
+                                      checked={wantsWispySet}
+                                      onChange={(e) => setWantsWispySet(e.target.checked)}
+                                      className="accent-pink-500 w-4 h-4 rounded cursor-pointer"
+                                    />
+                                    <div className="flex-1 flex justify-between items-center">
+                                      <span className={`text-[10px] font-semibold tracking-wide ${wantsWispySet ? (isDarkMode ? 'text-pink-400' : 'text-pink-600') : (isDarkMode ? 'text-stone-300' : 'text-stone-700')}`}>
+                                        {lang === 'fr' ? 'Ajouter Wispy Set' : 'Add Wispy Set'}
+                                      </span>
+                                      <span className={`text-[10px] font-bold ${wantsWispySet ? (isDarkMode ? 'text-pink-400' : 'text-pink-600') : 'text-stone-400'}`}>+$5.00</span>
+                                    </div>
+                                  </label>
+                                </div>
                             </div>
                           )}
                         </div>
@@ -972,8 +995,10 @@ export default function BookingForm({
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 text-xs font-sans leading-relaxed text-center sm:text-left">
                       <div className="space-y-0.5">
                         <span className="text-[9px] text-stone-400 font-mono tracking-wider block uppercase">{b.lashLook}</span>
-                        <span className={`font-serif font-bold block ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>{activeProduct.name}</span>
-                        <span className="text-[10px] text-pink-500 block font-mono font-bold">${activeProduct.price}.00</span>
+                        <span className={`font-serif font-bold block ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>
+                          {activeProduct.name} {wantsWispySet ? '(+ Wispy)' : ''}
+                        </span>
+                        <span className="text-[10px] text-pink-500 block font-mono font-bold">${computedPrice}.00</span>
                       </div>
                       <div className="space-y-0.5">
                         <span className="text-[9px] text-stone-400 font-mono tracking-wider block uppercase">{b.dateTime}</span>
@@ -1126,7 +1151,9 @@ export default function BookingForm({
                 {/* Treatment */}
                 <div className="space-y-1.5 text-xs">
                   <span className="text-[9px] text-stone-400 block tracking-widest uppercase">{b.treatmentArtist}</span>
-                  <div className={`font-serif font-bold text-sm ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>{confirmedBooking.style.name}</div>
+                  <div className={`font-serif font-bold text-sm ${isDarkMode ? 'text-stone-100' : 'text-stone-900'}`}>
+                    {confirmedBooking.style.name} {confirmedBooking.wantsWispySet ? '(+ Wispy)' : ''}
+                  </div>
                   <div className="flex items-center text-[10px] text-stone-500 space-x-1">
                     <CornerDownRight className="w-3.5 h-3.5 text-pink-600 shrink-0" />
                     <span>{b.stylist} <span className={`font-semibold ${isDarkMode ? 'text-stone-300' : 'text-stone-700'}`}>{confirmedBooking.artist.name}</span></span>

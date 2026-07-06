@@ -73,6 +73,7 @@ export interface Appointment {
   id: string;
   style: LashProduct;
   selectedServiceOption?: ServiceOption;
+  wantsWispySet?: boolean;
   artist: LashArtist;
   date: string;
   timeSlot: string;

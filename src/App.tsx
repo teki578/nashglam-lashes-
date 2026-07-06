@@ -518,22 +518,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Operating hours Col */}
-          <div className="space-y-4">
-            <h4 className="text-xs uppercase font-mono tracking-widest font-semibold text-stone-200">
-              {foot.hours}
-            </h4>
-            <div className="space-y-2 text-xs text-stone-400">
-              <div className="flex items-start space-x-2">
-                <Clock className="w-4 h-4 text-pink-500 shrink-0 mt-0.5" />
-                <span>
-                  {foot.hoursText} <br />
-                  {foot.satText} <br />
-                  {foot.sunText}
-                </span>
-              </div>
-            </div>
-          </div>
+
 
           {/* Safe hygiene certification logos */}
           <div className="space-y-4">

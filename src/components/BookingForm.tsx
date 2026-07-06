@@ -45,14 +45,8 @@ export default function BookingForm({
   
   // Calendar Month and Selected Day state
   const getInitialSelectedDate = () => {
-    // Minimum 48h in advance = 2 full calendar days ahead
     const d = new Date();
-    d.setDate(d.getDate() + 2);
-    const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    if (target.getDay() === 6) { // skip Saturday — not available
-      target.setDate(target.getDate() + 1); // jump to Sunday
-    }
-    return target;
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
   };
 
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -150,8 +144,7 @@ export default function BookingForm({
     }
         
     const now = new Date();
-    // 48-hour advance booking cutoff
-    const cutoff48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    const cutoff48h = now;
     const cellDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     
     return slots.map(slot => {
@@ -212,9 +205,8 @@ export default function BookingForm({
       
       const today = new Date();
       const todayTrunc = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const minBookingDate = new Date(todayTrunc.getTime() + 2 * 24 * 60 * 60 * 1000);
       
-      if (localDate >= minBookingDate && localDate.getDay() !== 6) {
+      if (localDate >= todayTrunc) {
          setSelectedDate(localDate);
          setCurrentYear(localDate.getFullYear());
          setCurrentMonth(localDate.getMonth());
@@ -225,7 +217,7 @@ export default function BookingForm({
            setSelectedTimeSlot(firstAvailable.time);
          }
       } else {
-         alert(lang === 'fr' ? 'Date invalide. Minimum 48h à l\'avance, et fermé le samedi.' : 'Invalid date. Minimum 48h advance notice, and closed on Saturdays.');
+         alert(lang === 'fr' ? 'Date invalide.' : 'Invalid date.');
       }
     }
   };
@@ -527,20 +519,6 @@ export default function BookingForm({
               <p className={`font-sans text-xs sm:text-sm ${isDarkMode ? 'text-stone-400' : 'text-stone-500'}`}>
                 {bookingStep === 'form' ? b.descForm : b.descDeposit}
               </p>
-              {bookingStep === 'form' && (
-                <div className={`inline-flex items-center space-x-1.5 py-1.5 px-3 rounded-full text-[10px] font-mono font-semibold tracking-widest border ${
-                  isDarkMode
-                    ? 'bg-amber-950/30 border-amber-800/40 text-amber-400'
-                    : 'bg-amber-50 border-amber-200 text-amber-700'
-                }`}>
-                  <Clock className="w-3 h-3 shrink-0" />
-                  <span>
-                    {lang === 'fr'
-                      ? '⚠ RÉSERVATIONS REQUISES MINIMUM 48H À L\'AVANCE'
-                      : '⚠ BOOKINGS REQUIRE MINIMUM 48H ADVANCE NOTICE'}
-                  </span>
-                </div>
-              )}
             </div>
 
             <form onSubmit={bookingStep === 'form' ? handleProceedToDeposit : handleConfirmPayment} className="space-y-6">
@@ -730,9 +708,8 @@ export default function BookingForm({
                               const today = new Date();
                               const todayTrunc = new Date(today.getFullYear(), today.getMonth(), today.getDate());
                               const cellTrunc = new Date(cellDate.getFullYear(), cellDate.getMonth(), cellDate.getDate());
-                              // Block any date within the 48h advance-booking window
-                              const minBookingDate = new Date(todayTrunc.getTime() + 2 * 24 * 60 * 60 * 1000);
-                              const isPast = cellTrunc < minBookingDate;
+                              // Block past dates
+                              const isPast = cellTrunc < todayTrunc;
                               
                               const isSelected = selectedDate &&
                                 selectedDate.getDate() === cellDate.getDate() &&

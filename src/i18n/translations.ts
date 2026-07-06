@@ -98,7 +98,7 @@ export const translations = {
       depositText:
         'A <strong>$25.00 deposit</strong> is required to confirm your styled appointment. This deposit is <strong>non-refundable but transferable to a rescheduled appointment with 24 hours notice</strong>. If you reschedule prior to 24 hours before your booking, the $25.00 applies to your newly selected slot. However, if you cancel or reschedule late, the deposit will not be returned or applied.',
       pleaseRead: 'PLEASE READ before proceeding!',
-      secureCheckout: 'SECURE ENCRYPTED CHECKOUT',
+      secureCheckout: 'Checkout',
       cardPlaceholder: 'Card Number (e.g. 4111 2222 3333 4444) *',
       securedDeposit: 'Secured Deposit Charge',
       cashmere: 'Formaldehyde-free luxury cashmere silk lashes.',
@@ -325,7 +325,7 @@ export const translations = {
       depositText:
         'Un <strong>dépôt de 25,00$</strong> est requis pour confirmer votre rendez-vous. Ce dépôt est <strong>non remboursable mais transférable à un rendez-vous reprogrammé avec 24 heures de préavis</strong>. Si vous reprogrammez avant 24 heures, le 25,00$ s\'applique à votre nouveau créneau. En cas d\'annulation ou de reprogrammation tardive, le dépôt ne sera pas remboursé.',
       pleaseRead: 'VEUILLEZ LIRE avant de continuer!',
-      secureCheckout: 'PAIEMENT SÉCURISÉ CHIFFRÉ',
+      secureCheckout: 'Checkout',
       cardPlaceholder: 'Numéro de carte (ex. 4111 2222 3333 4444) *',
       securedDeposit: 'Dépôt Sécurisé',
       cashmere: 'Cils en soie cachemire sans formaldéhyde.',

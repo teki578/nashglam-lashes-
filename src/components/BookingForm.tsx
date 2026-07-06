@@ -169,12 +169,6 @@ export default function BookingForm({
         isAvailable = false;
       }
       
-      if (!availability && day === 5) {
-        if (slot.time === '04:30 PM' || slot.time === '06:00 PM' || slot.time === '07:30 PM') {
-          isAvailable = false;
-        }
-      }
-      
       const slotStartTime = slotDateTime.getTime();
       const slotEndTime = slotStartTime + 3 * 60 * 60 * 1000; // 3 hours
 
@@ -1014,7 +1008,7 @@ export default function BookingForm({
                     <div className={`p-4.5 rounded-xl border max-w-md mx-auto space-y-3 ${
                       isDarkMode ? 'bg-stone-900/60 border-stone-800' : 'bg-stone-50 border-stone-200'
                     }`}>
-                      <span className="text-[10px] font-mono text-stone-400 block tracking-widest uppercase text-center">{b.secureCheckout}</span>
+                      <span className="text-xl font-bold font-sans text-pink-500 block tracking-widest uppercase text-center mb-2">{b.secureCheckout}</span>
                       
                       <div className={`p-4 border rounded-xl transition-all ${
                         isDarkMode
